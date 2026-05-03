@@ -7,10 +7,10 @@ interface Props {
 }
 
 const statusConfig = {
-  pending: { icon: '⏳', label: 'Pending Lock', color: 'text-yellow-400', bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)' },
+  pending: { icon: '⏳', label: 'Pending Lock', color: 'text-yellow-400', bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)',  pulse: false },
   locked: { icon: '🔒', label: 'Pi Locked in Escrow', color: 'text-orange-400', bg: 'rgba(249,115,22,0.08)', border: 'rgba(249,115,22,0.25)', pulse: true },
-  released: { icon: '✅', label: 'Pi Released', color: 'text-green-400', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)' },
-  refunded: { icon: '↩️', label: 'Pi Refunded', color: 'text-gray-400', bg: 'rgba(113,113,122,0.08)', border: 'rgba(113,113,122,0.25)' },
+  released: { icon: '✅', label: 'Pi Released', color: 'text-green-400', bg: 'rgba(34,197,94,0.08)', border: 'rgba(34,197,94,0.25)',  pulse: false },
+  refunded: { icon: '↩️', label: 'Pi Refunded', color: 'text-gray-400', bg: 'rgba(113,113,122,0.08)', border: 'rgba(113,113,122,0.25)', pulse: false },
 };
 
 export default function EscrowBox({ escrow, nairaAmount }: Props) {

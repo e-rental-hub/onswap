@@ -3,10 +3,10 @@ import { useState, useEffect, useCallback } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import AdCard from '@/components/p2p/AdCard';
 import { adsApi } from '@/lib/api';
-import { Ad, AdType, PaymentMethod, PAYMENT_METHOD_LABELS } from '@/types';
+import { Ad, AdType, PaymentMethodType, PAYMENT_METHOD_LABELS } from '@/types';
 import { logger } from '@/lib/logger';
 
-const PAYMENT_OPTIONS: { value: PaymentMethod | ''; label: string }[] = [
+const PAYMENT_OPTIONS: { value: PaymentMethodType | ''; label: string }[] = [
   { value: '', label: 'All Methods' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'opay', label: 'OPay' },
@@ -19,7 +19,7 @@ export default function P2PMarketPage() {
   const [tab, setTab] = useState<AdType>('buy');
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | ''>('');
+  const [paymentFilter, setPaymentFilter] = useState<PaymentMethodType | ''>('');
   const [amountFilter, setAmountFilter] = useState('');
   const [total, setTotal] = useState(0);
 
@@ -75,7 +75,7 @@ export default function P2PMarketPage() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-3 sm:ml-auto">
-            <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as PaymentMethod | '')}
+            <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as PaymentMethodType | '')}
               className="input-dark text-sm" style={{ width: 'auto', padding: '8px 12px' }}>
               {PAYMENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>

@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import { adsApi, ordersApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-import { Ad, PaymentMethod, PAYMENT_METHOD_LABELS } from '@/types';
+import { Ad, PaymentMethodType, PAYMENT_METHOD_LABELS } from '@/types';
 import { logger } from '@/lib/logger';
 
 export default function AdDetailPage() {
@@ -14,7 +14,7 @@ export default function AdDetailPage() {
   const [ad, setAd] = useState<Ad | null>(null);
   const [loading, setLoading] = useState(true);
   const [nairaAmount, setNairaAmount] = useState('');
-  const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | ''>('');
+  const [selectedMethod, setSelectedMethod] = useState<PaymentMethodType | ''>('');
   const [trading, setTrading] = useState(false);
   const [error, setError] = useState('');
 
@@ -164,7 +164,7 @@ export default function AdDetailPage() {
 
                     <div>
                       <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Payment Method</label>
-                      <select className="input-dark" value={selectedMethod} onChange={(e) => setSelectedMethod(e.target.value as PaymentMethod)}>
+                      <select className="input-dark" value={selectedMethod} onChange={(e) => setSelectedMethod(e.target.value as PaymentMethodType)}>
                         <option value="">Select method</option>
                         {ad.paymentMethods.map((pm) => <option key={pm} value={pm}>{PAYMENT_METHOD_LABELS[pm]}</option>)}
                       </select>

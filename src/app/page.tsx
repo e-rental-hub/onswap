@@ -95,7 +95,7 @@ export default function HomePage() {
         <div className="card p-10 pi-glow" style={{ borderColor: 'rgba(240,160,60,0.2)' }}>
           <h2 className="text-3xl font-bold mb-4" style={{ fontFamily: 'var(--font-display)' }}>Ready to trade?</h2>
           <p className="mb-8" style={{ color: 'var(--text-secondary)' }}>Join thousands of pioneers trading Pi securely.</p>
-          <Link href="/auth/register">
+          <Link href="/auth/login">
             <button className="btn-pi text-base px-8 py-3.5 rounded-xl">Create Free Account</button>
           </Link>
         </div>
