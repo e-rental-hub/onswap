@@ -36,6 +36,8 @@ export default function AdDetailPage() {
   const [wallet,      setWallet]      = useState<WalletSummary | null>(null);
   const [creating,    setCreating]    = useState(false);
   const [error,       setError]       = useState('');
+  const [walletAddr,  setWalletAddr]  = useState('');  // buyer's Pi wallet address for A2U release
+  const [saveAsDefault, setSaveAsDefault] = useState(false);
 
   // ── Load ad ─────────────────────────────────────────────────────────────────
   const fetchAd = useCallback(async () => {
@@ -87,6 +89,14 @@ export default function AdDetailPage() {
     return '';
   }
 
+  // Stellar public key: starts with G, 56 chars total, base32 alphabet
+  const STELLAR_ADDR_RE = /^G[A-Z2-7]{55}$/;
+  function validateWalletAddress(): string {
+    if (!walletAddr.trim()) return 'Enter your Pi wallet address';
+    if (!STELLAR_ADDR_RE.test(walletAddr.trim())) return 'Invalid Pi wallet address — must start with G and be 56 characters';
+    return '';
+  }
+
   const validationError = validate();
   const isOwn = !!user && !!ad && (
     ad.creator.id === user.id ||
@@ -118,9 +128,10 @@ export default function AdDetailPage() {
     setError('');
     try {
       const res = await ordersApi.createOrder({
-        adId:          id,
-        piAmount:      piRounded,
-        paymentMethod: selectedPm as string,
+        adId:               id,
+        piAmount:           piRounded,
+        paymentMethod:      selectedPm as string,
+        buyerWalletAddress: walletAddr.trim(),
       });
       setStep('done');
       logger.info(`Order created: ${res.data.order._id}`);
@@ -555,10 +566,40 @@ export default function AdDetailPage() {
                     </div>
                   )}
 
+                  {/* Wallet address input */}
+                  <div className="rounded-xl p-4"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold" style={{ color: 'var(--text-secondary)', letterSpacing: '0.06em' }}>
+                        YOUR PI WALLET ADDRESS
+                      </p>
+                    </div>
+                    <input
+                      className="input-dark text-sm w-full mb-2"
+                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}
+                      placeholder="G… (56 characters)"
+                      value={walletAddr}
+                      onChange={(e) => setWalletAddr(e.target.value.trim())}
+                      maxLength={56}
+                      spellCheck={false}
+                    />
+                    {walletAddr && validateWalletAddress() && (
+                      <p className="text-xs mb-2" style={{ color: '#f87171' }}>
+                        {validateWalletAddress()}
+                      </p>
+                    )}
+                    <div className="rounded-lg p-3 mt-1"
+                      style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                      <p className="text-xs leading-relaxed" style={{ color: '#fca5a5' }}>
+                        ⚠️ <strong>Double-check this address.</strong> Pi sent to a wrong or invalid address cannot be recovered. This address will be used to release your Pi when the trade completes.
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Confirm button */}
                   <button
                     onClick={handleCreateOrder}
-                    disabled={creating}
+                    disabled={creating || !!validateWalletAddress()}
                     className={`${ctaColor} w-full py-3.5 rounded-xl font-bold text-base`}>
                     {creating ? 'Creating order…' : isBuyAd ? '🔒 Lock Pi & Notify Buyer' : '💳 Place Order'}
                   </button>

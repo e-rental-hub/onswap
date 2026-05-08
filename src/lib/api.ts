@@ -98,7 +98,7 @@ export const adsApi = {
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
 export const ordersApi = {
-  createOrder: (data: { adId: string; piAmount: number; paymentMethod: string }) =>
+  createOrder: (data: { adId: string; piAmount: number; paymentMethod: string; buyerWalletAddress: string }) =>
     apiClient.post('/orders', data),
   getOrders:   (params?: Record<string, string>) => apiClient.get('/orders', { params }),
   getOrderById:(id: string) => apiClient.get(`/orders/${id}`),

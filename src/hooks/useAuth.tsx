@@ -18,6 +18,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isDevMode: boolean;
 
   /** Called by PiAuthButton after a successful Pi.authenticate() */
   loginWithPi: (
@@ -52,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const isDevMode = process.env.NODE_ENV === "development";
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -161,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         loading,
         isAuthenticated: !!token,
+        isDevMode,
         loginWithPi,
         logout,
         refreshUser,
