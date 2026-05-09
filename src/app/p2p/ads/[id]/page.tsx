@@ -25,7 +25,7 @@ type InputMode = 'pi' | 'ngn';
 export default function AdDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isDevMode } = useAuth();
 
   const [ad,          setAd]          = useState<Ad | null>(null);
   const [loading,     setLoading]     = useState(true);
@@ -98,7 +98,7 @@ export default function AdDetailPage() {
   }
 
   const validationError = validate();
-  const isOwn = !!user && !!ad && (
+  const isOwn = !isDevMode && !!user && !!ad && (
     ad.creator.id === user.id ||
     (ad.creator as unknown as { _id: string })._id === user.id
   );
