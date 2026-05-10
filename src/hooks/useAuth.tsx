@@ -7,9 +7,9 @@ import {
   useCallback,
   ReactNode,
 } from 'react';
-import { authApi, paymentMethodsApi } from '@/lib/api';
+import { authApi, paymentMethodsApi, piWalletsApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { User, PaymentMethodDetail, NewPaymentMethodDetail } from '@/types';
+import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress } from '@/types';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -18,7 +18,6 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
-  isDevMode: boolean;
 
   /** Called by PiAuthButton after a successful Pi.authenticate() */
   loginWithPi: (
@@ -36,6 +35,11 @@ interface AuthContextType {
   updatePaymentMethod: (pmId: string, data: Partial<NewPaymentMethodDetail>) => Promise<void>;
   removePaymentMethod: (pmId: string) => Promise<void>;
   setDefaultPaymentMethod: (pmId: string) => Promise<void>;
+  // Pi wallet addresses
+  addPiWalletAddress: (data: NewPiWalletAddress) => Promise<void>;
+  updatePiWalletAddress: (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) => Promise<void>;
+  removePiWalletAddress: (waId: string) => Promise<void>;
+  setDefaultPiWalletAddress: (waId: string) => Promise<void>;
 }
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
@@ -53,8 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const isDevMode = process.env.NODE_ENV === "development";
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -155,6 +157,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logger.info(`Default payment method set: ${pmId}`);
   }, []);
 
+  // ── Pi Wallet Address helpers ─────────────────────────────────────────────
+
+  const syncPiWalletAddresses = (addresses: PiWalletAddress[]) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, piWalletAddresses: addresses };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const addPiWalletAddress = useCallback(async (data: NewPiWalletAddress) => {
+    const res = await piWalletsApi.add(data);
+    syncPiWalletAddresses(res.data.piWalletAddresses);
+    logger.info(`Pi wallet address added: ${data.tag}`);
+  }, []);
+
+  const updatePiWalletAddress = useCallback(
+    async (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) => {
+      const res = await piWalletsApi.update(waId, data);
+      syncPiWalletAddresses(res.data.piWalletAddresses);
+      logger.info(`Pi wallet address updated: ${waId}`);
+    }, []
+  );
+
+  const removePiWalletAddress = useCallback(async (waId: string) => {
+    const res = await piWalletsApi.remove(waId);
+    syncPiWalletAddresses(res.data.piWalletAddresses);
+    logger.info(`Pi wallet address removed: ${waId}`);
+  }, []);
+
+  const setDefaultPiWalletAddress = useCallback(async (waId: string) => {
+    const res = await piWalletsApi.setDefault(waId);
+    syncPiWalletAddresses(res.data.piWalletAddresses);
+    logger.info(`Default Pi wallet address set: ${waId}`);
+  }, []);
+
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
@@ -164,7 +203,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         loading,
         isAuthenticated: !!token,
-        isDevMode,
         loginWithPi,
         logout,
         refreshUser,
@@ -172,6 +210,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatePaymentMethod,
         removePaymentMethod,
         setDefaultPaymentMethod,
+        addPiWalletAddress,
+        updatePiWalletAddress,
+        removePiWalletAddress,
+        setDefaultPiWalletAddress,
       }}
     >
       {children}

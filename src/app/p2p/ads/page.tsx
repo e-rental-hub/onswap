@@ -4,11 +4,12 @@ import { useRouter }              from 'next/navigation';
 import Navbar                     from '@/components/layout/Navbar';
 import { WalletCard }             from '@/components/p2p/WalletCard';
 import { DepositModal }           from '@/components/p2p/DepositModal';
-import { adsApi, walletApi, paymentMethodsApi } from '@/lib/api';
+import { adsApi, walletApi, paymentMethodsApi, piWalletsApi } from '@/lib/api';
 import { useAuth }                from '@/hooks/useAuth';
 import {
   Ad, AdType, AdStatus, PaymentMethodType, PaymentMethodDetail,
   NewPaymentMethodDetail, PAYMENT_METHOD_LABELS, WalletSummary,
+  PiWalletAddress, NewPiWalletAddress,
 } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -32,6 +33,8 @@ interface AdFormState {
   selectedPmIds:   string[];
   // For buy ads — which payment types the seller accepts from counterparty
   acceptedTypes:   PaymentMethodType[];
+  // For buy ads — which saved Pi wallet address id is selected for receiving Pi
+  selectedWalletId: string;
   paymentWindow:   string;
   terms:           string;
   autoReply:       string;
@@ -39,7 +42,7 @@ interface AdFormState {
 
 const BLANK_FORM: AdFormState = {
   type: 'buy', piAmount: '', minLimit: '', maxLimit: '', pricePerPi: '',
-  selectedPmIds: [], acceptedTypes: [],
+  selectedPmIds: [], acceptedTypes: [], selectedWalletId: '',
   paymentWindow: '15', terms: '', autoReply: '',
 };
 
@@ -58,6 +61,16 @@ const BLANK_ACCOUNT: NewAccountDraft = {
   type: 'bank_transfer', label: 'Bank Transfer',
   accountName: '', accountNumber: '', bankName: '', isDefault: false,
 };
+
+interface NewWalletDraft {
+  address:   string;
+  tag:       string;
+  isDefault: boolean;
+}
+
+const BLANK_WALLET: NewWalletDraft = { address: '', tag: '', isDefault: false };
+
+const STELLAR_RE = /^G[A-Z2-7]{55}$/;
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -109,7 +122,7 @@ function buildPaymentMethodTypes(
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PostAdPage() {
-  const { isAuthenticated, user, addPaymentMethod } = useAuth();
+  const { isAuthenticated, user, addPaymentMethod, addPiWalletAddress } = useAuth();
   const router  = useRouter();
   const { toast, toastErr, showToast } = useToast();
 
@@ -131,6 +144,13 @@ export default function PostAdPage() {
   const [showNewAccount,  setShowNewAccount]  = useState(false);
   const [newAccount,      setNewAccount]      = useState<NewAccountDraft>(BLANK_ACCOUNT);
   const [savingAccount,   setSavingAccount]   = useState(false);
+
+  // Saved Pi wallet addresses
+  const [savedWallets,      setSavedWallets]      = useState<PiWalletAddress[]>([]);
+  const [loadingWallets,    setLoadingWallets]    = useState(false);
+  const [showNewWallet,     setShowNewWallet]     = useState(false);
+  const [newWallet,         setNewWallet]         = useState<NewWalletDraft>(BLANK_WALLET);
+  const [savingWallet,      setSavingWallet]      = useState(false);
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -164,11 +184,24 @@ export default function PostAdPage() {
     }
   }, []);
 
+  const loadSavedWallets = useCallback(async () => {
+    setLoadingWallets(true);
+    try {
+      const r = await piWalletsApi.getAll();
+      setSavedWallets(r.data.piWalletAddresses);
+    } catch (e) {
+      logger.error('loadSavedWallets error:', e);
+    } finally {
+      setLoadingWallets(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadMyAds();
     loadWallet();
     loadSavedMethods();
-  }, [loadMyAds, loadWallet, loadSavedMethods]);
+    loadSavedWallets();
+  }, [loadMyAds, loadWallet, loadSavedMethods, loadSavedWallets]);
 
   // ── Sell ad — toggle saved account selection ───────────────────────────────
   const toggleSavedAccount = (pmId: string) => {
@@ -234,12 +267,47 @@ export default function PostAdPage() {
     }
   };
 
+  // ── Add new Pi wallet inline ──────────────────────────────────────────────
+  const handleAddNewWallet = async () => {
+    if (!newWallet.address.trim() || !newWallet.tag.trim()) {
+      showToast('Address and tag name are required', true);
+      return;
+    }
+    if (!STELLAR_RE.test(newWallet.address.trim())) {
+      showToast('Invalid Pi wallet address — must start with G and be 56 characters', true);
+      return;
+    }
+    setSavingWallet(true);
+    try {
+      const payload: NewPiWalletAddress = {
+        address:   newWallet.address.trim(),
+        tag:       newWallet.tag.trim(),
+        isDefault: newWallet.isDefault,
+      };
+      await addPiWalletAddress(payload);
+      const r = await piWalletsApi.getAll();
+      const updated = r.data.piWalletAddresses;
+      setSavedWallets(updated);
+      const newest = updated[updated.length - 1];
+      if (newest) setForm((f) => ({ ...f, selectedWalletId: newest._id }));
+      setNewWallet(BLANK_WALLET);
+      setShowNewWallet(false);
+      showToast('Wallet address saved and selected');
+    } catch (e) {
+      showToast('Failed to save wallet address', true);
+      logger.error('addPiWalletAddress error:', e);
+    } finally {
+      setSavingWallet(false);
+    }
+  };
+
   // ── Open create / edit ─────────────────────────────────────────────────────
   const openCreate = () => {
     setEditingAd(null);
     setForm(BLANK_FORM);
     setError('');
     setShowNewAccount(false);
+    setShowNewWallet(false);
     setView('create');
   };
 
@@ -255,20 +323,40 @@ export default function PostAdPage() {
       if (match) selectedIds.push(match._id);
     }
 
+    // Reconstruct selectedWalletId for buy ads — match the ad's piWalletAddress
+    // snapshot against the user's saved wallet list by address.
+    let selectedWalletId = '';
+    if (ad.type === 'buy' && ad.piWalletAddress) {
+      const matchedWallet = savedWallets.find(
+        (w) => w.address === ad.piWalletAddress!.address
+      );
+      if (matchedWallet) {
+        selectedWalletId = matchedWallet._id;
+      }
+      // If not found in saved list (e.g. deleted since ad was created),
+      // fall back to the default wallet so the field isn't left blank.
+      if (!selectedWalletId) {
+        const def = savedWallets.find((w) => w.isDefault) ?? savedWallets[0];
+        if (def) selectedWalletId = def._id;
+      }
+    }
+
     setForm({
-      type:          ad.type,
-      piAmount:      String(ad.piAmount),
-      minLimit:      String(ad.minLimit),
-      maxLimit:      String(ad.maxLimit),
-      pricePerPi:    String(ad.pricePerPi),
-      selectedPmIds: selectedIds,
-      acceptedTypes: ad.type === 'buy' ? [...ad.paymentMethods] : [],
-      paymentWindow: String(ad.paymentWindow),
-      terms:         ad.terms     ?? '',
-      autoReply:     ad.autoReply ?? '',
+      type:             ad.type,
+      piAmount:         String(ad.piAmount),
+      minLimit:         String(ad.minLimit),
+      maxLimit:         String(ad.maxLimit),
+      pricePerPi:       String(ad.pricePerPi),
+      selectedPmIds:    selectedIds,
+      acceptedTypes:    ad.type === 'buy' ? [...ad.paymentMethods] : [],
+      selectedWalletId,
+      paymentWindow:    String(ad.paymentWindow),
+      terms:            ad.terms     ?? '',
+      autoReply:        ad.autoReply ?? '',
     });
     setError('');
     setShowNewAccount(false);
+    setShowNewWallet(false);
     setView('edit');
   };
 
@@ -292,6 +380,11 @@ export default function PostAdPage() {
       ? buildPaymentMethodTypes(form.selectedPmIds, savedMethods)
       : form.acceptedTypes;
 
+    // For buy ads include the selected Pi wallet address snapshot
+    const selectedWallet = !isSell
+      ? savedWallets.find((w) => w._id === form.selectedWalletId)
+      : undefined;
+
     return {
       type:          form.type,
       piAmount:      Number(form.piAmount),
@@ -303,6 +396,10 @@ export default function PostAdPage() {
       paymentWindow: Number(form.paymentWindow),
       terms:         form.terms,
       autoReply:     form.autoReply,
+      // Snapshot so counterparty sees it on the ad detail page
+      piWalletAddress: selectedWallet
+        ? { address: selectedWallet.address, tag: selectedWallet.tag }
+        : undefined,
     };
   }
 
@@ -313,6 +410,10 @@ export default function PostAdPage() {
 
     if (!sellMethodsValid) { setError('Select at least one payment account'); return; }
     if (!buyMethodsValid)  { setError('Select at least one accepted payment method'); return; }
+    if (form.type === 'buy' && !form.selectedWalletId) {
+      setError('Select a Pi wallet address to receive Pi when the trade completes');
+      return;
+    }
 
     if (form.type === 'sell' && wallet && wallet.piBalance < sellAdPi) {
       setShortfall(sellAdPi - wallet.piBalance);
@@ -348,6 +449,10 @@ export default function PostAdPage() {
 
     if (!sellMethodsValid) { setError('Select at least one payment account'); return; }
     if (!buyMethodsValid)  { setError('Select at least one accepted payment method'); return; }
+    if (editingAd.type === 'buy' && !form.selectedWalletId) {
+      setError('Select a Pi wallet address to receive Pi');
+      return;
+    }
 
     const tradedAmount = editingAd.piAmount - editingAd.availableAmount;
     if (editingAd.type === 'sell' && Number(form.piAmount) < tradedAmount) {
@@ -953,42 +1058,208 @@ export default function PostAdPage() {
                 )}
 
                 {/* ════════════════════════════════════════════════════════
-                    BUY AD — accepted payment types only (no account details)
+                    BUY AD — accepted payment types + Pi wallet address picker
                 ════════════════════════════════════════════════════════ */}
                 {form.type === 'buy' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Accepted Payment Methods <span style={{ color: '#f87171' }}>*</span>
-                      </label>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        How you want sellers to pay you
-                      </span>
+                  <div className="space-y-5">
+                    {/* Accepted payment methods */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          Accepted Payment Methods <span style={{ color: '#f87171' }}>*</span>
+                        </label>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          How sellers will pay you in Naira
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {ALL_PAYMENT_TYPES.map((t) => {
+                          const active = form.acceptedTypes.includes(t);
+                          return (
+                            <button key={t} type="button" onClick={() => toggleAcceptedType(t)}
+                              className="px-4 py-2 rounded-lg border text-sm transition-all"
+                              style={{
+                                background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
+                                color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
+                                borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
+                              }}>
+                              {active && <span className="mr-1">✓</span>}
+                              {PAYMENT_METHOD_LABELS[t]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {form.acceptedTypes.length === 0 && (
+                        <p className="text-xs mt-2" style={{ color: '#f87171' }}>
+                          Select at least one payment method.
+                        </p>
+                      )}
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {ALL_PAYMENT_TYPES.map((t) => {
-                        const active = form.acceptedTypes.includes(t);
-                        return (
-                          <button key={t} type="button" onClick={() => toggleAcceptedType(t)}
-                            className="px-4 py-2 rounded-lg border text-sm transition-all"
-                            style={{
-                              background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
-                              color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
-                              borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
-                            }}>
-                            {active && <span className="mr-1">✓</span>}
-                            {PAYMENT_METHOD_LABELS[t]}
+                    {/* Pi wallet address picker */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          Receiving Pi Wallet <span style={{ color: '#f87171' }}>*</span>
+                        </label>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          Pi will be sent here when trade completes
+                        </span>
+                      </div>
+
+                      {loadingWallets ? (
+                        <div className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                          Loading your wallets…
+                        </div>
+                      ) : savedWallets.length === 0 && !showNewWallet ? (
+                        <div className="rounded-xl p-5 text-center mb-3"
+                          style={{ background: 'var(--bg-elevated)', border: '1px dashed var(--border)' }}>
+                          <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
+                            No saved Pi wallet addresses yet.
+                          </p>
+                          <button type="button" onClick={() => setShowNewWallet(true)}
+                            className="btn-pi text-sm px-4 py-2 rounded-lg">
+                            + Add Pi Wallet
                           </button>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 mb-3">
+                          {savedWallets.map((w) => {
+                            const selected = form.selectedWalletId === w._id;
+                            return (
+                              <button key={w._id} type="button"
+                                onClick={() => setForm((f) => ({ ...f, selectedWalletId: w._id }))}
+                                className="w-full text-left rounded-xl p-4 transition-all"
+                                style={{
+                                  background: selected ? 'rgba(240,160,60,0.1)' : 'var(--bg-elevated)',
+                                  border:     `1px solid ${selected ? 'rgba(240,160,60,0.4)' : 'var(--border)'}`,
+                                }}>
+                                <div className="flex items-center gap-3">
+                                  {/* Radio indicator */}
+                                  <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                                    style={{
+                                      border: `2px solid ${selected ? 'var(--pi-gold)' : 'var(--border)'}`,
+                                    }}>
+                                    {selected && (
+                                      <div className="w-2.5 h-2.5 rounded-full"
+                                        style={{ background: 'var(--pi-gold)' }} />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-sm"
+                                        style={{ color: selected ? 'var(--pi-gold)' : 'var(--text-primary)' }}>
+                                        {w.tag}
+                                      </span>
+                                      {w.isDefault && (
+                                        <span className="text-xs px-1.5 py-0.5 rounded"
+                                          style={{ background: 'rgba(240,160,60,0.15)', color: 'var(--pi-gold)' }}>
+                                          Default
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs mt-0.5 truncate"
+                                      style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                                      {w.address}
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
 
-                    {form.acceptedTypes.length === 0 && (
-                      <p className="text-xs mt-2" style={{ color: '#f87171' }}>
-                        Select at least one payment method.
-                      </p>
-                    )}
+                          {!showNewWallet && (
+                            <button type="button" onClick={() => setShowNewWallet(true)}
+                              className="w-full rounded-xl p-3 text-sm transition-all"
+                              style={{ background: 'transparent', border: '1px dashed var(--border)', color: 'var(--text-muted)' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(240,160,60,0.3)'; e.currentTarget.style.color = 'var(--pi-gold)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                              + Add new Pi wallet address
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Inline new wallet form */}
+                      {showNewWallet && (
+                        <div className="rounded-xl p-5 mt-2"
+                          style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(240,160,60,0.2)' }}>
+                          <div className="flex items-center justify-between mb-4">
+                            <p className="text-sm font-semibold" style={{ color: 'var(--pi-gold)' }}>
+                              Add Pi Wallet Address
+                            </p>
+                            <button type="button" onClick={() => { setShowNewWallet(false); setNewWallet(BLANK_WALLET); }}
+                              className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                              Cancel
+                            </button>
+                          </div>
+
+                          <div className="space-y-3 mb-4">
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Tag / Label *
+                              </label>
+                              <input className="input-dark text-sm" placeholder="e.g. My Pi Wallet, Trading Wallet"
+                                value={newWallet.tag}
+                                onChange={(e) => setNewWallet((w) => ({ ...w, tag: e.target.value }))} />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                                Pi Wallet Address (G…) *
+                              </label>
+                              <input
+                                className="input-dark text-sm w-full"
+                                style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}
+                                placeholder="G… (56 characters)"
+                                maxLength={56}
+                                spellCheck={false}
+                                value={newWallet.address}
+                                onChange={(e) => setNewWallet((w) => ({ ...w, address: e.target.value.trim() }))}
+                              />
+                              {newWallet.address && !STELLAR_RE.test(newWallet.address) && (
+                                <p className="text-xs mt-1" style={{ color: '#f87171' }}>
+                                  Invalid address — must start with G and be exactly 56 characters
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Default toggle */}
+                          <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+                            <div
+                              onClick={() => setNewWallet((w) => ({ ...w, isDefault: !w.isDefault }))}
+                              className="w-10 h-6 rounded-full relative transition-colors flex-shrink-0"
+                              style={{ background: newWallet.isDefault ? 'var(--pi-gold)' : 'var(--border)' }}>
+                              <div className="absolute top-1 w-4 h-4 rounded-full bg-white transition-all"
+                                style={{ left: newWallet.isDefault ? '22px' : '4px' }} />
+                            </div>
+                            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                              Set as default wallet
+                            </span>
+                          </label>
+
+                          {/* Warning */}
+                          <div className="rounded-lg p-3 mb-4"
+                            style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                            <p className="text-xs leading-relaxed" style={{ color: '#fca5a5' }}>
+                              ⚠️ <strong>Verify this address carefully.</strong> Pi sent to a wrong address cannot be recovered. Only add addresses you fully control.
+                            </p>
+                          </div>
+
+                          <button type="button" onClick={handleAddNewWallet}
+                            disabled={savingWallet || !newWallet.tag.trim() || !STELLAR_RE.test(newWallet.address)}
+                            className="btn-pi w-full py-2.5 rounded-xl text-sm">
+                            {savingWallet ? 'Saving…' : 'Save & Select Wallet'}
+                          </button>
+                        </div>
+                      )}
+
+                      {form.selectedWalletId === '' && !showNewWallet && savedWallets.length > 0 && (
+                        <p className="text-xs mt-2" style={{ color: '#f87171' }}>
+                          Select a Pi wallet address to receive Pi.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1035,7 +1306,8 @@ export default function PostAdPage() {
                       saving ||
                       (view === 'create' && form.type === 'sell' && !hasSufficient) ||
                       !sellMethodsValid ||
-                      !buyMethodsValid
+                      !buyMethodsValid ||
+                      (form.type === 'buy' && !form.selectedWalletId)
                     }
                     className="btn-pi flex-1 py-3 rounded-xl text-base">
                     {saving

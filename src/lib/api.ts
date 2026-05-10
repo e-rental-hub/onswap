@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { logger } from './logger';
-import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo } from '@/types';
+import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -62,6 +62,25 @@ export const paymentMethodsApi = {
     apiClient.delete<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>(`/auth/payment-methods/${pmId}`),
   setDefault: (pmId: string) =>
     apiClient.patch<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>(`/auth/payment-methods/${pmId}/set-default`),
+};
+
+// ─── Pi Wallet Addresses ──────────────────────────────────────────────────────
+
+export const piWalletsApi = {
+  getAll: () =>
+    apiClient.get<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>('/auth/pi-wallets'),
+
+  add: (data: NewPiWalletAddress) =>
+    apiClient.post<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>('/auth/pi-wallets', data),
+
+  update: (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) =>
+    apiClient.patch<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>(`/auth/pi-wallets/${waId}`, data),
+
+  remove: (waId: string) =>
+    apiClient.delete<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>(`/auth/pi-wallets/${waId}`),
+
+  setDefault: (waId: string) =>
+    apiClient.patch<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>(`/auth/pi-wallets/${waId}/set-default`),
 };
 
 // ─── Wallet ───────────────────────────────────────────────────────────────────

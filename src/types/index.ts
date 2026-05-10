@@ -34,6 +34,20 @@ export interface PaymentMethodDetail {
 
 export type NewPaymentMethodDetail = Omit<PaymentMethodDetail, '_id' | 'createdAt'>;
 
+// ─── Pi Wallet Addresses ──────────────────────────────────────────────────────
+
+export interface PiWalletAddress {
+  _id:       string;
+  /** G… Stellar public key, exactly 56 chars */
+  address:   string;
+  /** User-assigned label, e.g. "My Pi Wallet", "Trading wallet" */
+  tag:       string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export type NewPiWalletAddress = Omit<PiWalletAddress, '_id' | 'createdAt'>;
+
 // ─── Wallet ───────────────────────────────────────────────────────────────────
 
 export type TxType =
@@ -86,8 +100,9 @@ export interface User {
   completionRate:  number;
   piBalance:       number;
   lockedBalance:   number;
-  paymentMethods:  PaymentMethodDetail[];
-  createdAt:       string;
+  paymentMethods:     PaymentMethodDetail[];
+  piWalletAddresses:  PiWalletAddress[];
+  createdAt:          string;
 }
 
 // ─── Ads ──────────────────────────────────────────────────────────────────────
@@ -121,6 +136,8 @@ export interface Ad {
   status:          AdStatus;
   completedOrders: number;
   reservedPi:      number;
+  /** Snapshot of the creator's selected Pi wallet for buy ads (address + tag) */
+  piWalletAddress?: { address: string; tag: string };
   createdAt:       string;
 }
 
