@@ -219,8 +219,8 @@ export default function AdDetailPage() {
     if (err) { setError(err); return; }
     setError('');
 
-    const walErr = validateWalletSelection();
-    if (walErr) { setError(walErr); return; }
+    // const walErr = validateWalletSelection();
+    // if (walErr) { setError(walErr); return; }
 
     // Buy-ad: current user is the Pi seller — check their in-app balance
     if (ad!.type === 'buy') {
