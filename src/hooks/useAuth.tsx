@@ -18,6 +18,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isDevMode: boolean;
 
   /** Called by PiAuthButton after a successful Pi.authenticate() */
   loginWithPi: (
@@ -46,6 +47,7 @@ interface AuthContextType {
 
 const TOKEN_KEY = 'pi_p2p_token';
 const USER_KEY = 'pi_p2p_user';
+const isDevMode = process.env.NODE_ENV === "development"
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -203,6 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         loading,
         isAuthenticated: !!token,
+        isDevMode,
         loginWithPi,
         logout,
         refreshUser,
