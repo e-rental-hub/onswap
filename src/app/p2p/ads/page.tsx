@@ -9,8 +9,11 @@ import { useAuth }                from '@/hooks/useAuth';
 import {
   Ad, AdType, AdStatus, PaymentMethodType, PaymentMethodDetail,
   NewPaymentMethodDetail, PAYMENT_METHOD_LABELS, WalletSummary,
+  PiWalletAddress,
 } from '@/types';
 import { logger } from '@/lib/logger';
+import { useToast } from '@/hooks/useToast';
+import PiWalletPicker from '@/components/p2p/PiWalletAddressPicker';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -58,25 +61,6 @@ const BLANK_ACCOUNT: NewAccountDraft = {
   type: 'bank_transfer', label: 'Bank Transfer',
   accountName: '', accountNumber: '', bankName: '', isDefault: false,
 };
-
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-function useToast() {
-  const [toast,    setToast]    = useState('');
-  const [toastErr, setToastErr] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = useCallback((msg: string, isError = false) => {
-    if (timer.current) clearTimeout(timer.current);
-    setToast(msg);
-    setToastErr(isError);
-    timer.current = setTimeout(() => setToast(''), 3500);
-  }, []);
-
-  return { toast, toastErr, showToast };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Build the paymentDetails array the backend expects from selected saved accounts */
 function buildPaymentDetails(
@@ -132,6 +116,7 @@ export default function PostAdPage() {
   const [newAccount,      setNewAccount]      = useState<NewAccountDraft>(BLANK_ACCOUNT);
   const [savingAccount,   setSavingAccount]   = useState(false);
   const [walletAddr,  setWalletAddr]  = useState('');  // buyer's Pi wallet address for A2U release
+  const [selectedPiWallet, setSelectedPiWallet] = useState<PiWalletAddress | null>(null)
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1000,34 +985,10 @@ export default function PostAdPage() {
                     )}
 
                     {/* Wallet address input */}
-                    <div className="rounded-xl p-4"
-                      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-bold" style={{ color: 'var(--text-secondary)', letterSpacing: '0.06em' }}>
-                          YOUR PI WALLET ADDRESS
-                        </p>
-                      </div>
-                      <input
-                        className="input-dark text-sm w-full mb-2"
-                        style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}
-                        placeholder="G… (56 characters)"
-                        value={walletAddr}
-                        onChange={(e) => setWalletAddr(e.target.value.trim())}
-                        maxLength={56}
-                        spellCheck={false}
-                      />
-                      {walletAddr && validateWalletAddress() && (
-                        <p className="text-xs mb-2" style={{ color: '#f87171' }}>
-                          {validateWalletAddress()}
-                        </p>
-                      )}
-                      <div className="rounded-lg p-3 mt-1"
-                        style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                        <p className="text-xs leading-relaxed" style={{ color: '#fca5a5' }}>
-                          ⚠️ <strong>Double-check this address.</strong> Pi sent to a wrong or invalid address cannot be recovered. This address will be used to release your Pi when the trade completes.
-                        </p>
-                      </div>
-                    </div>
+                    <PiWalletPicker
+                    selectedPiWallet={selectedPiWallet}
+                    setSelectedPiWallet={setSelectedPiWallet}
+                    />
                   </div>
                 )}
 

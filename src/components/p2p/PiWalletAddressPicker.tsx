@@ -14,8 +14,8 @@ interface NewWallet {
 }
 
 interface Props {
-  setSelectedPiWallet: React.Dispatch<SetStateAction<PiWalletAddress>>;
-  selectedPiWallet: PiWalletAddress
+  setSelectedPiWallet: React.Dispatch<SetStateAction<PiWalletAddress | null>>;
+  selectedPiWallet: PiWalletAddress | null
 }
 
 const PiWalletPicker: React.FC<Props> = ({setSelectedPiWallet, selectedPiWallet}) => {
@@ -26,31 +26,31 @@ const PiWalletPicker: React.FC<Props> = ({setSelectedPiWallet, selectedPiWallet}
   const { toast, toastErr, showToast } = useToast();
 
   // Inline add-new-wallet state
-    const [showNewWallet,  setShowNewWallet]  = useState(false);
-    const [newWallet,  setNewWallet]  = useState<NewWallet>(BLANK_WALLET);
-    const [savingWallet,   setSavingWallet]   = useState(false);
-    const [savedWallets,   setSavedWallets]   = useState<PiWalletAddress[]>([]);
-    const [loadingWallets, setLoadingWallets] = useState(false);
-      
+  const [showNewWallet,  setShowNewWallet]  = useState(false);
+  const [newWallet,  setNewWallet]  = useState<NewWallet>(BLANK_WALLET);
+  const [savingWallet,   setSavingWallet]   = useState(false);
+  const [savedWallets,   setSavedWallets]   = useState<PiWalletAddress[]>([]);
+  const [loadingWallets, setLoadingWallets] = useState(false);
     
-    const fetchSavedWallets = useCallback(async () => {
-      if (!isAuthenticated) return;
-      setLoadingWallets(true);
-      try {
-        const res = await piWalletsApi.getAll();
-        const wallets = res.data.piWalletAddresses;
-        setSavedWallets(wallets);
-        // Auto-select default wallet
-        const def = wallets.find((w) => w.isDefault) ?? wallets[0];
-        if (def) setSelectedPiWallet(def);
-      } catch (e) {
-        logger.error('fetchSavedWallets error:', e);
-      } finally {
-        setLoadingWallets(false);
-      }
-    }, [isAuthenticated]);
-
-    useEffect(() => { fetchSavedWallets(); }, [fetchSavedWallets]);
+  
+  const fetchSavedWallets = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setLoadingWallets(true);
+    try {
+      const res = await piWalletsApi.getAll();
+      const wallets = res.data.piWalletAddresses;
+      setSavedWallets(wallets);
+      // Auto-select default wallet
+      const def = wallets.find((w) => w.isDefault) ?? wallets[0];
+      if (def) setSelectedPiWallet(def);
+    } catch (e) {
+      logger.error('fetchSavedWallets error:', e);
+    } finally {
+      setLoadingWallets(false);
+    }
+  }, [isAuthenticated]);
+  
+  useEffect(() => { fetchSavedWallets(); }, [fetchSavedWallets]);
 
   // ── Add new Pi wallet inline ──────────────────────────────────────────────
   const handleAddNewWallet = async () => {
@@ -142,8 +142,8 @@ const PiWalletPicker: React.FC<Props> = ({setSelectedPiWallet, selectedPiWallet}
           <div className="space-y-2 mb-3">
             {/* Saved wallets */}
             {savedWallets.map((w) => {
-              const selected =
-                selectedPiWallet._id === w._id;
+              const selected = selectedPiWallet ?
+                selectedPiWallet._id === w._id : null;
 
               return (
                 <button
