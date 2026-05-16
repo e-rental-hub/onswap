@@ -131,6 +131,7 @@ export default function PostAdPage() {
   const [showNewAccount,  setShowNewAccount]  = useState(false);
   const [newAccount,      setNewAccount]      = useState<NewAccountDraft>(BLANK_ACCOUNT);
   const [savingAccount,   setSavingAccount]   = useState(false);
+  const [walletAddr,  setWalletAddr]  = useState('');  // buyer's Pi wallet address for A2U release
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -281,6 +282,14 @@ export default function PostAdPage() {
 
   const sellMethodsValid = form.type !== 'sell' || form.selectedPmIds.length > 0;
   const buyMethodsValid  = form.type !== 'buy'  || form.acceptedTypes.length > 0;
+
+  // Stellar public key: starts with G, 56 chars total, base32 alphabet
+  const STELLAR_ADDR_RE = /^G[A-Z2-7]{55}$/;
+  function validateWalletAddress(): string {
+    if (!walletAddr.trim()) return 'Enter your Pi wallet address';
+    if (!STELLAR_ADDR_RE.test(walletAddr.trim())) return 'Invalid Pi wallet address — must start with G and be 56 characters';
+    return '';
+  }
 
   // ── Submit helpers ─────────────────────────────────────────────────────────
   function buildPayload() {
@@ -989,6 +998,36 @@ export default function PostAdPage() {
                         Select at least one payment method.
                       </p>
                     )}
+
+                    {/* Wallet address input */}
+                    <div className="rounded-xl p-4"
+                      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-bold" style={{ color: 'var(--text-secondary)', letterSpacing: '0.06em' }}>
+                          YOUR PI WALLET ADDRESS
+                        </p>
+                      </div>
+                      <input
+                        className="input-dark text-sm w-full mb-2"
+                        style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}
+                        placeholder="G… (56 characters)"
+                        value={walletAddr}
+                        onChange={(e) => setWalletAddr(e.target.value.trim())}
+                        maxLength={56}
+                        spellCheck={false}
+                      />
+                      {walletAddr && validateWalletAddress() && (
+                        <p className="text-xs mb-2" style={{ color: '#f87171' }}>
+                          {validateWalletAddress()}
+                        </p>
+                      )}
+                      <div className="rounded-lg p-3 mt-1"
+                        style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                        <p className="text-xs leading-relaxed" style={{ color: '#fca5a5' }}>
+                          ⚠️ <strong>Double-check this address.</strong> Pi sent to a wrong or invalid address cannot be recovered. This address will be used to release your Pi when the trade completes.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
 
