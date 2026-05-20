@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
+import { ThemeToggle, ThemeToggleIcon } from './Themetoggle';
 
 export default function Navbar() {
   const { user, logout, isAuthenticated } = useAuth();
@@ -16,7 +17,7 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 border-b" style={{ background: 'rgba(10,10,11,0.92)', backdropFilter: 'blur(20px)', borderColor: 'var(--border-subtle)' }}>
+    <nav className="sticky top-0 z-50 border-b" style={{backdropFilter: 'blur(20px)', borderColor: 'var(--border-subtle)' }}>
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
@@ -47,6 +48,7 @@ export default function Navbar() {
 
         {/* Auth section */}
         <div className="flex items-center gap-3">
+          <ThemeToggleIcon />
           {isAuthenticated && user ? (
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex items-center gap-2">
