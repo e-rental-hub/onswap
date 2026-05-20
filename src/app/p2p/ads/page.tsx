@@ -42,7 +42,7 @@ interface AdFormState {
 
 const BLANK_FORM: AdFormState = {
   type: 'buy', piAmount: '', minLimit: '', maxLimit: '', pricePerPi: '',
-  selectedPmIds: [], acceptedTypes: [], selectedWalletId: '',
+  selectedPmIds: [], acceptedTypes: [],
   paymentWindow: '15', terms: '', autoReply: '',
 };
 
@@ -544,13 +544,6 @@ export default function PostAdPage() {
   // Pi wallet for buy ads — where Pi is released when a trade completes
   const [selectedPiWallet, setSelectedPiWallet] = useState<PiWalletAddress | null>(null);
 
-  // Saved Pi wallet addresses
-  const [savedWallets,      setSavedWallets]      = useState<PiWalletAddress[]>([]);
-  const [loadingWallets,    setLoadingWallets]    = useState(false);
-  const [showNewWallet,     setShowNewWallet]     = useState(false);
-  const [newWallet,         setNewWallet]         = useState<NewWalletDraft>(BLANK_WALLET);
-  const [savingWallet,      setSavingWallet]      = useState(false);
-
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) router.push('/auth/login');
@@ -583,24 +576,11 @@ export default function PostAdPage() {
     }
   }, []);
 
-  const loadSavedWallets = useCallback(async () => {
-    setLoadingWallets(true);
-    try {
-      const r = await piWalletsApi.getAll();
-      setSavedWallets(r.data.piWalletAddresses);
-    } catch (e) {
-      logger.error('loadSavedWallets error:', e);
-    } finally {
-      setLoadingWallets(false);
-    }
-  }, []);
-
   useEffect(() => {
     loadMyAds();
     loadWallet();
     loadSavedMethods();
-    loadSavedWallets();
-  }, [loadMyAds, loadWallet, loadSavedMethods, loadSavedWallets]);
+  }, [loadMyAds, loadWallet, loadSavedMethods]);
 
   // ── Payment account toggles ────────────────────────────────────────────────
   const toggleSavedAccount = (pmId: string) => {
@@ -656,40 +636,6 @@ export default function PostAdPage() {
     }
   };
 
-  // ── Add new Pi wallet inline ──────────────────────────────────────────────
-  const handleAddNewWallet = async () => {
-    if (!newWallet.address.trim() || !newWallet.tag.trim()) {
-      showToast('Address and tag name are required', true);
-      return;
-    }
-    if (!STELLAR_RE.test(newWallet.address.trim())) {
-      showToast('Invalid Pi wallet address — must start with G and be 56 characters', true);
-      return;
-    }
-    setSavingWallet(true);
-    try {
-      const payload: NewPiWalletAddress = {
-        address:   newWallet.address.trim(),
-        tag:       newWallet.tag.trim(),
-        isDefault: newWallet.isDefault,
-      };
-      await addPiWalletAddress(payload);
-      const r = await piWalletsApi.getAll();
-      const updated = r.data.piWalletAddresses;
-      setSavedWallets(updated);
-      const newest = updated[updated.length - 1];
-      if (newest) setForm((f) => ({ ...f, selectedWalletId: newest._id }));
-      setNewWallet(BLANK_WALLET);
-      setShowNewWallet(false);
-      showToast('Wallet address saved and selected');
-    } catch (e) {
-      showToast('Failed to save wallet address', true);
-      logger.error('addPiWalletAddress error:', e);
-    } finally {
-      setSavingWallet(false);
-    }
-  };
-
   // ── Open create / edit ─────────────────────────────────────────────────────
   const openCreate = () => {
     setEditingAd(null);
@@ -717,14 +663,12 @@ export default function PostAdPage() {
       pricePerPi:       String(ad.pricePerPi),
       selectedPmIds:    selectedIds,
       acceptedTypes:    ad.type === 'buy' ? [...ad.paymentMethods] : [],
-      selectedWalletId,
       paymentWindow:    String(ad.paymentWindow),
       terms:            ad.terms     ?? '',
       autoReply:        ad.autoReply ?? '',
     });
     setError('');
     setShowNewAccount(false);
-    setShowNewWallet(false);
     setView('edit');
   };
 
@@ -749,11 +693,6 @@ export default function PostAdPage() {
     const paymentMethods = isSell
       ? buildPaymentMethodTypes(form.selectedPmIds, savedMethods)
       : form.acceptedTypes;
-
-    // For buy ads include the selected Pi wallet address snapshot
-    const selectedWallet = !isSell
-      ? savedWallets.find((w) => w._id === form.selectedWalletId)
-      : undefined;
 
     return {
       type:          form.type,
@@ -816,10 +755,6 @@ export default function PostAdPage() {
 
     if (!sellMethodsValid) { setError('Select at least one payment account'); return; }
     if (!buyMethodsValid)  { setError('Select at least one accepted payment method'); return; }
-    if (editingAd.type === 'buy' && !form.selectedWalletId) {
-      setError('Select a Pi wallet address to receive Pi');
-      return;
-    }
 
     const tradedAmount = editingAd.piAmount - editingAd.availableAmount;
     if (editingAd.type === 'sell' && Number(form.piAmount) < tradedAmount) {
