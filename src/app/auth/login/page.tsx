@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { logger } from '@/lib/logger';
 import { PiAuthButton } from '@/components/PiAuthButton';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const { loginWithPi } = useAuth();
@@ -34,7 +35,18 @@ export default function LoginPage() {
       <div className="w-full max-w-md relative">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold" style={{ background: 'linear-gradient(135deg,#f0a03c,#ec8518)', color: '#0a0a0b' }}>π</div>
+          <div
+              className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden"
+            >
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={50}
+                height={50}
+                className="object-contain w-full h-full p-0.5"
+                priority
+              />
+            </div>
             <span className="font-bold text-xl" style={{ fontFamily: 'var(--font-display)' }}>on<span className="pi-text">Swap</span></span>
           </Link>
           <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>Welcome back</h1>
