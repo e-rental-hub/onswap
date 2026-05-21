@@ -32,7 +32,7 @@ interface AdFormState {
   maxLimit:      string;
   pricePerPi:    string;
   /** Sell ads: selected saved-account _ids (drives paymentDetails) */
-  selectedPmIds: string[];
+  selectedPmId: string;
   /** Buy ads: payment types accepted from counterparty */
   acceptedTypes: PaymentMethodType[];
   paymentWindow: string;
@@ -42,7 +42,7 @@ interface AdFormState {
 
 const BLANK_FORM: AdFormState = {
   type: 'buy', piAmount: '', minLimit: '', maxLimit: '', pricePerPi: '',
-  selectedPmIds: [], acceptedTypes: [],
+  selectedPmId: '', acceptedTypes: [],
   paymentWindow: '15', terms: '', autoReply: '',
 };
 
@@ -269,6 +269,7 @@ export default function PostAdPage() {
   // in page state — UNLESS the user is in edit mode where we need them to
   // reconstruct selectedPmIds.  We keep a lightweight cache here.
   const [savedMethodsCache, setSavedMethodsCache] = useState<PaymentMethodDetail[]>([]);
+  const [selectedPaymentAccount, setSelectedPaymentAccount] = useState<PaymentMethodDetail | null>(null);
 
   // Pi wallet for buy ads
   const [selectedPiWallet, setSelectedPiWallet] = useState<PiWalletAddress | null>(null);
@@ -293,31 +294,13 @@ export default function PostAdPage() {
     } catch (e) { logger.error('loadWallet error:', e); }
   }, []);
 
-  /** Keeps savedMethodsCache fresh — used for payload building and edit reconstruction */
-  const loadSavedMethodsCache = useCallback(async () => {
-    try {
-      const r = await paymentMethodsApi.getAll();
-      setSavedMethodsCache(r.data.paymentMethods);
-    } catch (e) { logger.error('loadSavedMethodsCache error:', e); }
-  }, []);
 
   useEffect(() => {
     loadMyAds();
     loadWallet();
-    loadSavedMethodsCache();
-  }, [loadMyAds, loadWallet, loadSavedMethodsCache]);
+  }, [loadMyAds, loadWallet]);
 
   // ── Payment toggles ────────────────────────────────────────────────────────
-
-  /** Used by PaymentAccountPicker (multi mode) to toggle a sell-ad account */
-  const toggleSavedAccount = useCallback((pmId: string) => {
-    setForm((f) => ({
-      ...f,
-      selectedPmIds: f.selectedPmIds.includes(pmId)
-        ? f.selectedPmIds.filter((id) => id !== pmId)
-        : [...f.selectedPmIds, pmId],
-    }));
-  }, []);
 
   const toggleAcceptedType = (type: PaymentMethodType) => {
     setForm((f) => ({
@@ -339,21 +322,13 @@ export default function PostAdPage() {
 
   const openEdit = (ad: Ad) => {
     setEditingAd(ad);
-    // Reconstruct selectedPmIds from ad paymentDetails vs cached saved methods
-    const selectedIds: string[] = [];
-    for (const detail of ad.paymentDetails) {
-      const match = savedMethodsCache.find(
-        (pm) => pm.type === detail.type && pm.accountNumber === detail.accountNumber,
-      );
-      if (match) selectedIds.push(match._id);
-    }
     setForm({
       type:          ad.type,
       piAmount:      String(ad.piAmount),
       minLimit:      String(ad.minLimit),
       maxLimit:      String(ad.maxLimit),
       pricePerPi:    String(ad.pricePerPi),
-      selectedPmIds: selectedIds,
+      selectedPmId: selectedPaymentAccount? selectedPaymentAccount._id : '',
       acceptedTypes: ad.type === 'buy' ? [...ad.paymentMethods] : [],
       paymentWindow: String(ad.paymentWindow),
       terms:         ad.terms     ?? '',
@@ -370,7 +345,7 @@ export default function PostAdPage() {
   const isEditSell    = view === 'edit' && editingAd?.type === 'sell';
   const editMaxPi     = editingAd?.piAmount ?? Infinity;
 
-  const sellMethodsValid = form.type !== 'sell' || form.selectedPmIds.length > 0;
+  const sellMethodsValid = form.type !== 'sell' || form.selectedPmId !== '';
   const buyMethodsValid  = form.type !== 'buy'  || form.acceptedTypes.length > 0;
   const buyWalletValid   = form.type !== 'buy'  || !!selectedPiWallet;
 
@@ -378,10 +353,10 @@ export default function PostAdPage() {
   function buildPayload() {
     const isSell         = form.type === 'sell';
     const paymentDetails = isSell
-      ? buildPaymentDetails(form.selectedPmIds, savedMethodsCache)
+      ? buildPaymentDetails([form.selectedPmId], savedMethodsCache)
       : [];
     const paymentMethods = isSell
-      ? buildPaymentMethodTypes(form.selectedPmIds, savedMethodsCache)
+      ? buildPaymentMethodTypes([form.selectedPmId], savedMethodsCache)
       : form.acceptedTypes;
 
     return {
@@ -778,17 +753,8 @@ export default function PostAdPage() {
                 ════════════════════════════════════════════════════════ */}
                 {form.type === 'sell' && (
                   <PaymentAccountPicker
-                    multi
-                    selectedIds={form.selectedPmIds}
-                    onToggle={toggleSavedAccount}
-                    onNewSaved={(account) => {
-                      // Keep cache in sync and auto-select the new account
-                      setSavedMethodsCache((prev) => [...prev, account]);
-                      setForm((f) => ({
-                        ...f,
-                        selectedPmIds: [...f.selectedPmIds, account._id],
-                      }));
-                    }}
+                    selectedAccount={selectedPaymentAccount}
+                    setSelectedAccount={setSelectedPaymentAccount}
                     label="Payment Accounts"
                     hint="Buyers will pay to these accounts"
                     required

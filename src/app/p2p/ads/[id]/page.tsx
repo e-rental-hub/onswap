@@ -804,18 +804,27 @@ export default function AdDetailPage() {
                     </div>
                   )}
 
+                  {/* Pi wallet picker — where Pi is released on completion */}
                   {/* ── BUY-AD (viewer is Pi seller): pick their own payment account ── */}
-                  {isBuyAd && (
-                    <div className="mb-5">
-                      <PaymentAccountPicker
-                        selectedAccount={selectedPaymentAccount}
-                        setSelectedAccount={setSelectedPaymentAccount}
-                        label="Your Naira Receiving Account"
-                        hint="Buyer sends Naira here"
-                        required
-                      />
-                    </div>
-                  )}
+                  {isBuyAd ? 
+                    (
+                      <div className="mb-5">
+                        <PaymentAccountPicker
+                          selectedAccount={selectedPaymentAccount}
+                          setSelectedAccount={setSelectedPaymentAccount}
+                          label="Your Naira Receiving Account"
+                          hint="Buyer sends Naira here"
+                          required
+                        />
+                      </div>
+                    ) : (
+                      <div className="mb-5">
+                        <PiWalletPicker
+                          selectedPiWallet={selectedPiWallet}
+                          setSelectedPiWallet={setSelectedPiWallet}
+                        />
+                      </div>
+                    )}
 
                   {/* Buy-ad: wallet balance (shown only after wallet loaded) */}
                   {isBuyAd && (
@@ -893,14 +902,6 @@ export default function AdDetailPage() {
                       balanceAfterLock={(wallet?.piBalance ?? 0) - piRounded}
                     />
                   )}
-
-                  {/* Pi wallet picker — where Pi is released on completion */}
-                  <div className="mb-5">
-                    <PiWalletPicker
-                      selectedPiWallet={selectedPiWallet}
-                      setSelectedPiWallet={setSelectedPiWallet}
-                    />
-                  </div>
 
                   {/* Confirm */}
                   <button
