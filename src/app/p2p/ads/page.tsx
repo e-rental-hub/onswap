@@ -1,19 +1,19 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter }              from 'next/navigation';
-import Navbar                     from '@/components/layout/Navbar';
-import { WalletCard }             from '@/components/p2p/WalletCard';
-import { DepositModal }           from '@/components/p2p/DepositModal';
-import PiWalletPicker             from '@/components/p2p/PiWalletAddressPicker';
+import { useRouter }         from 'next/navigation';
+import Navbar                from '@/components/layout/Navbar';
+import { WalletCard }        from '@/components/p2p/WalletCard';
+import { DepositModal }      from '@/components/p2p/DepositModal';
+import PiWalletPicker        from '@/components/p2p/PiWalletAddressPicker';
+import PaymentAccountPicker  from '@/components/p2p/paymentAccountPicker';
 import { adsApi, walletApi, paymentMethodsApi } from '@/lib/api';
-import { useAuth }                from '@/hooks/useAuth';
+import { useAuth }           from '@/hooks/useAuth';
 import {
   Ad, AdType, AdStatus, PaymentMethodType, PaymentMethodDetail,
-  NewPaymentMethodDetail, PAYMENT_METHOD_LABELS, WalletSummary,
-  PiWalletAddress,
+  PAYMENT_METHOD_LABELS, WalletSummary, PiWalletAddress,
 } from '@/types';
-import { logger }    from '@/lib/logger';
-import { useToast }  from '@/hooks/useToast';
+import { logger }   from '@/lib/logger';
+import { useToast } from '@/hooks/useToast';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,21 +46,6 @@ const BLANK_FORM: AdFormState = {
   paymentWindow: '15', terms: '', autoReply: '',
 };
 
-// ─── Inline new-account draft ─────────────────────────────────────────────────
-
-interface NewAccountDraft {
-  type:          PaymentMethodType;
-  accountName:   string;
-  accountNumber: string;
-  bankName:      string;
-  isDefault:     boolean;
-}
-
-const BLANK_ACCOUNT: NewAccountDraft = {
-  type: 'bank_transfer',
-  accountName: '', accountNumber: '', bankName: '', isDefault: false,
-};
-
 // ─── Payload builders ─────────────────────────────────────────────────────────
 
 function buildPaymentDetails(ids: string[], saved: PaymentMethodDetail[]) {
@@ -88,32 +73,6 @@ function buildPaymentMethodTypes(
 
 // ─── Reusable sub-components ──────────────────────────────────────────────────
 
-/** Label + optional hint row used above form sections */
-function SectionHeader({
-  label,
-  hint,
-  required,
-}: {
-  label:    string;
-  hint?:    string;
-  required?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-        {label}
-        {required && <span style={{ color: '#f87171' }}> *</span>}
-      </label>
-      {hint && (
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          {hint}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** Inline error banner */
 function ErrorBanner({ message }: { message: string }) {
   if (!message) return null;
   return (
@@ -130,60 +89,51 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-/** Generic empty state card */
 function EmptyState({
-  emoji,
-  title,
-  body,
-  cta,
-  onCta,
+  emoji, title, body, cta, onCta,
 }: {
-  emoji: string;
-  title: string;
-  body:  string;
-  cta:   string;
-  onCta: () => void;
+  emoji: string; title: string; body: string; cta: string; onCta: () => void;
 }) {
   return (
     <div className="card p-16 text-center">
       <div className="text-4xl mb-4">{emoji}</div>
-      <p className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
-        {title}
-      </p>
-      <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-        {body}
-      </p>
-      <button onClick={onCta} className="btn-pi px-6 py-2.5">
-        {cta}
-      </button>
+      <p className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{title}</p>
+      <p className="text-sm mb-6"      style={{ color: 'var(--text-muted)' }}>{body}</p>
+      <button onClick={onCta} className="btn-pi px-6 py-2.5">{cta}</button>
     </div>
   );
 }
 
-/** A single ad card in the My Ads list */
-function AdCard({
-  ad,
-  isMenuOpen,
-  onToggleMenu,
-  menuRef,
-  onEdit,
-  onActivate,
-  onPause,
-  onCancel,
-  onHardDelete,
+function MenuItem({
+  children, color, hoverBg = 'var(--bg-elevated)', onClick, suffix,
 }: {
-  ad:           Ad;
-  isMenuOpen:   boolean;
-  onToggleMenu: () => void;
-  menuRef:      React.RefObject<HTMLDivElement>;
-  onEdit:       () => void;
-  onActivate:   () => void;
-  onPause:      () => void;
-  onCancel:     () => void;
-  onHardDelete: () => void;
+  children: React.ReactNode; color: string; hoverBg?: string;
+  onClick: () => void; suffix?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
+      style={{ color }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+    >
+      {children}
+      {suffix && <span className="ml-auto text-xs opacity-60">{suffix}</span>}
+    </button>
+  );
+}
+
+function AdCard({
+  ad, isMenuOpen, onToggleMenu, menuRef,
+  onEdit, onActivate, onPause, onCancel, onHardDelete,
+}: {
+  ad: Ad; isMenuOpen: boolean; onToggleMenu: () => void;
+  menuRef: React.RefObject<HTMLDivElement>;
+  onEdit: () => void; onActivate: () => void; onPause: () => void;
+  onCancel: () => void; onHardDelete: () => void;
 }) {
   const tradedPi = ad.piAmount - ad.availableAmount;
-
   return (
     <div className="card p-5">
       <div className="flex items-start gap-4">
@@ -204,11 +154,7 @@ function AdCard({
               Limit: ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
             </span>
           </div>
-
-          <div
-            className="flex flex-wrap items-center gap-3 mt-1 text-sm"
-            style={{ color: 'var(--text-muted)' }}
-          >
+          <div className="flex flex-wrap items-center gap-3 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
             <span>
               <span style={{ color: 'var(--pi-gold)' }}>π{ad.availableAmount}</span>{' '}
               available
@@ -217,28 +163,19 @@ function AdCard({
             {ad.type === 'sell' && ad.reservedPi > 0 && (
               <span
                 className="text-xs px-2 py-0.5 rounded-full"
-                style={{
-                  background: 'rgba(250,204,21,0.1)',
-                  color:      '#facc15',
-                  border:     '1px solid rgba(250,204,21,0.2)',
-                }}
+                style={{ background: 'rgba(250,204,21,0.1)', color: '#facc15', border: '1px solid rgba(250,204,21,0.2)' }}
               >
                 🔒 π{ad.reservedPi} locked
               </span>
             )}
             <span>{ad.completedOrders} completed</span>
           </div>
-
           <div className="flex flex-wrap gap-1.5 mt-2">
             {ad.paymentMethods.map((pm) => (
               <span
                 key={pm}
                 className="text-xs px-2 py-0.5 rounded"
-                style={{
-                  background:  'rgba(240,160,60,0.07)',
-                  color:       'var(--text-muted)',
-                  border:      '1px solid rgba(240,160,60,0.12)',
-                }}
+                style={{ background: 'rgba(240,160,60,0.07)', color: 'var(--text-muted)', border: '1px solid rgba(240,160,60,0.12)' }}
               >
                 {PAYMENT_METHOD_LABELS[pm]}
               </span>
@@ -247,7 +184,6 @@ function AdCard({
         </div>
 
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
-          {/* Status badge */}
           <span
             className={`text-xs px-2 py-1 rounded-full font-medium ${
               ad.status === 'active'  ? 'text-green-400 bg-green-400/10'   :
@@ -258,81 +194,44 @@ function AdCard({
             {ad.status}
           </span>
 
-          {/* Action menu */}
           <div className="relative" ref={isMenuOpen ? menuRef : null}>
             <button
               onClick={onToggleMenu}
               className="text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5"
-              style={{
-                borderColor: 'var(--border)',
-                color:       'var(--text-secondary)',
-                background:  'var(--bg-elevated)',
-              }}
+              style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-elevated)' }}
             >
               Actions
               <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                <path
-                  d="M2 3.5l3 3 3-3"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  fill="none"
-                />
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
               </svg>
             </button>
 
             {isMenuOpen && (
               <div
                 className="absolute right-0 top-full mt-1 z-20 rounded-xl overflow-hidden"
-                style={{
-                  minWidth:   '160px',
-                  background: 'var(--bg-card)',
-                  border:     '1px solid var(--border)',
-                  boxShadow:  '0 8px 32px rgba(0,0,0,0.4)',
-                }}
+                style={{ minWidth: '160px', background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
               >
-                <MenuDivider />
-
                 {ad.status !== 'cancelled' && ad.status !== 'completed' && (
-                  <MenuItem color="var(--pi-gold)" onClick={onEdit}>
-                    ✏️ Edit Ad
-                  </MenuItem>
+                  <MenuItem color="var(--pi-gold)" onClick={onEdit}>✏️ Edit Ad</MenuItem>
                 )}
-
                 {ad.status === 'paused' && (
-                  <MenuItem color="#4ade80" onClick={onActivate}>
-                    ▶ Activate
-                  </MenuItem>
+                  <MenuItem color="#4ade80" onClick={onActivate}>▶ Activate</MenuItem>
                 )}
-
                 {ad.status === 'active' && (
-                  <MenuItem color="#facc15" onClick={onPause}>
-                    ⏸ Pause
-                  </MenuItem>
+                  <MenuItem color="#facc15" onClick={onPause}>⏸ Pause</MenuItem>
                 )}
-
                 {(ad.status === 'active' || ad.status === 'paused') && (
                   <>
                     <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '2px 0' }} />
-                    <MenuItem
-                      color="#f87171"
-                      hoverBg="rgba(239,68,68,0.08)"
-                      onClick={onCancel}
-                      suffix="refunds Pi"
-                    >
+                    <MenuItem color="#f87171" hoverBg="rgba(239,68,68,0.08)" onClick={onCancel} suffix="refunds Pi">
                       ✕ Cancel Ad
                     </MenuItem>
                   </>
                 )}
-
                 {ad.status === 'cancelled' && (
                   <>
                     <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '2px 0' }} />
-                    <MenuItem
-                      color="#f87171"
-                      hoverBg="rgba(239,68,68,0.08)"
-                      onClick={onHardDelete}
-                    >
+                    <MenuItem color="#f87171" hoverBg="rgba(239,68,68,0.08)" onClick={onHardDelete}>
                       🗑 Delete Permanently
                     </MenuItem>
                   </>
@@ -346,180 +245,10 @@ function AdCard({
   );
 }
 
-/** Thin divider helper used inside action menus */
-function MenuDivider() {
-  return null; // semantic placeholder — actual dividers are rendered inline above
-}
-
-/** Single action menu item */
-function MenuItem({
-  children,
-  color,
-  hoverBg = 'var(--bg-elevated)',
-  onClick,
-  suffix,
-}: {
-  children: React.ReactNode;
-  color:    string;
-  hoverBg?: string;
-  onClick:  () => void;
-  suffix?:  string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
-      style={{ color }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-    >
-      {children}
-      {suffix && (
-        <span className="ml-auto text-xs opacity-60">{suffix}</span>
-      )}
-    </button>
-  );
-}
-
-/** Inline form for adding a new payment account */
-function NewAccountForm({
-  account,
-  saving,
-  onChange,
-  onSave,
-  onCancel,
-}: {
-  account:  NewAccountDraft;
-  saving:   boolean;
-  onChange: (patch: Partial<NewAccountDraft>) => void;
-  onSave:   () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div
-      className="rounded-xl p-5 mt-2"
-      style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(240,160,60,0.2)' }}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold" style={{ color: 'var(--pi-gold)' }}>
-          New Payment Account
-        </p>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          Cancel
-        </button>
-      </div>
-
-      {/* Account type chips */}
-      <div className="mb-3">
-        <label
-          className="block text-xs font-medium mb-1.5"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          Account Type
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {ALL_PAYMENT_TYPES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onChange({ type: t })}
-              className="text-xs px-3 py-1.5 rounded-lg border transition-all"
-              style={{
-                background:  account.type === t ? 'rgba(240,160,60,0.15)' : 'var(--bg-card)',
-                color:       account.type === t ? 'var(--pi-gold)'         : 'var(--text-secondary)',
-                borderColor: account.type === t ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
-              }}
-            >
-              {PAYMENT_METHOD_LABELS[t]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Account fields */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-        <div>
-          <label
-            className="block text-xs font-medium mb-1"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            Account Name *
-          </label>
-          <input
-            className="input-dark text-sm"
-            placeholder="John Doe"
-            value={account.accountName}
-            onChange={(e) => onChange({ accountName: e.target.value })}
-          />
-        </div>
-        <div>
-          <label
-            className="block text-xs font-medium mb-1"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            Account Number *
-          </label>
-          <input
-            className="input-dark text-sm"
-            placeholder="0123456789"
-            value={account.accountNumber}
-            onChange={(e) => onChange({ accountNumber: e.target.value })}
-          />
-        </div>
-        <div>
-          <label
-            className="block text-xs font-medium mb-1"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            Bank Name{account.type === 'bank_transfer' ? ' *' : ' (optional)'}
-          </label>
-          <input
-            className="input-dark text-sm"
-            placeholder="GTBank"
-            value={account.bankName}
-            onChange={(e) => onChange({ bankName: e.target.value })}
-          />
-        </div>
-      </div>
-
-      {/* Default toggle */}
-      <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
-        <div
-          onClick={() => onChange({ isDefault: !account.isDefault })}
-          className="w-10 h-6 rounded-full relative transition-colors flex-shrink-0"
-          style={{ background: account.isDefault ? 'var(--pi-gold)' : 'var(--border)' }}
-        >
-          <div
-            className="absolute top-1 w-4 h-4 rounded-full bg-white transition-all"
-            style={{ left: account.isDefault ? '22px' : '4px' }}
-          />
-        </div>
-        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Set as default account
-        </span>
-      </label>
-
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        className="btn-pi w-full py-2.5 rounded-xl text-sm"
-      >
-        {saving ? 'Saving…' : 'Save & Select Account'}
-      </button>
-    </div>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PostAdPage() {
-  const { isAuthenticated, user, addPaymentMethod } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const router  = useRouter();
   const { toast, toastErr, showToast } = useToast();
 
@@ -534,14 +263,14 @@ export default function PostAdPage() {
   const [editingAd,   setEditingAd]   = useState<Ad | null>(null);
   const [form,        setForm]        = useState<AdFormState>(BLANK_FORM);
 
-  // Saved payment accounts
-  const [savedMethods,   setSavedMethods]   = useState<PaymentMethodDetail[]>([]);
-  const [loadingSaved,   setLoadingSaved]   = useState(false);
-  const [showNewAccount, setShowNewAccount] = useState(false);
-  const [newAccount,     setNewAccount]     = useState<NewAccountDraft>(BLANK_ACCOUNT);
-  const [savingAccount,  setSavingAccount]  = useState(false);
+  // Sell-ad: saved payment methods are fetched inside PaymentAccountPicker,
+  // but we still need the full list here to buildPaymentDetails for the payload.
+  // We re-fetch them lazily when building the payload rather than storing them
+  // in page state — UNLESS the user is in edit mode where we need them to
+  // reconstruct selectedPmIds.  We keep a lightweight cache here.
+  const [savedMethodsCache, setSavedMethodsCache] = useState<PaymentMethodDetail[]>([]);
 
-  // Pi wallet for buy ads — where Pi is released when a trade completes
+  // Pi wallet for buy ads
   const [selectedPiWallet, setSelectedPiWallet] = useState<PiWalletAddress | null>(null);
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
@@ -564,33 +293,31 @@ export default function PostAdPage() {
     } catch (e) { logger.error('loadWallet error:', e); }
   }, []);
 
-  const loadSavedMethods = useCallback(async () => {
-    setLoadingSaved(true);
+  /** Keeps savedMethodsCache fresh — used for payload building and edit reconstruction */
+  const loadSavedMethodsCache = useCallback(async () => {
     try {
       const r = await paymentMethodsApi.getAll();
-      setSavedMethods(r.data.paymentMethods);
-    } catch (e) {
-      logger.error('loadSavedMethods error:', e);
-    } finally {
-      setLoadingSaved(false);
-    }
+      setSavedMethodsCache(r.data.paymentMethods);
+    } catch (e) { logger.error('loadSavedMethodsCache error:', e); }
   }, []);
 
   useEffect(() => {
     loadMyAds();
     loadWallet();
-    loadSavedMethods();
-  }, [loadMyAds, loadWallet, loadSavedMethods]);
+    loadSavedMethodsCache();
+  }, [loadMyAds, loadWallet, loadSavedMethodsCache]);
 
-  // ── Payment account toggles ────────────────────────────────────────────────
-  const toggleSavedAccount = (pmId: string) => {
+  // ── Payment toggles ────────────────────────────────────────────────────────
+
+  /** Used by PaymentAccountPicker (multi mode) to toggle a sell-ad account */
+  const toggleSavedAccount = useCallback((pmId: string) => {
     setForm((f) => ({
       ...f,
       selectedPmIds: f.selectedPmIds.includes(pmId)
         ? f.selectedPmIds.filter((id) => id !== pmId)
         : [...f.selectedPmIds, pmId],
     }));
-  };
+  }, []);
 
   const toggleAcceptedType = (type: PaymentMethodType) => {
     setForm((f) => ({
@@ -601,56 +328,21 @@ export default function PostAdPage() {
     }));
   };
 
-  // ── Add new account ────────────────────────────────────────────────────────
-  const handleAddNewAccount = async () => {
-    if (!newAccount.accountName.trim() || !newAccount.accountNumber.trim()) {
-      showToast('Account name and number are required', true);
-      return;
-    }
-    setSavingAccount(true);
-    try {
-      const payload: NewPaymentMethodDetail = {
-        type:          newAccount.type,
-        label:         PAYMENT_METHOD_LABELS[newAccount.type],
-        accountName:   newAccount.accountName.trim(),
-        accountNumber: newAccount.accountNumber.trim(),
-        bankName:      newAccount.bankName.trim() || undefined,
-        isDefault:     newAccount.isDefault,
-      };
-      await addPaymentMethod(payload);
-      const r       = await paymentMethodsApi.getAll();
-      const updated = r.data.paymentMethods;
-      setSavedMethods(updated);
-      const newest = updated[updated.length - 1];
-      if (newest) {
-        setForm((f) => ({ ...f, selectedPmIds: [...f.selectedPmIds, newest._id] }));
-      }
-      setNewAccount(BLANK_ACCOUNT);
-      setShowNewAccount(false);
-      showToast('Account saved and selected');
-    } catch (e) {
-      showToast('Failed to save account', true);
-      logger.error('addPaymentMethod error:', e);
-    } finally {
-      setSavingAccount(false);
-    }
-  };
-
   // ── Open create / edit ─────────────────────────────────────────────────────
   const openCreate = () => {
     setEditingAd(null);
     setForm(BLANK_FORM);
     setError('');
-    setShowNewAccount(false);
     setSelectedPiWallet(null);
     setView('create');
   };
 
   const openEdit = (ad: Ad) => {
     setEditingAd(ad);
+    // Reconstruct selectedPmIds from ad paymentDetails vs cached saved methods
     const selectedIds: string[] = [];
     for (const detail of ad.paymentDetails) {
-      const match = savedMethods.find(
+      const match = savedMethodsCache.find(
         (pm) => pm.type === detail.type && pm.accountNumber === detail.accountNumber,
       );
       if (match) selectedIds.push(match._id);
@@ -668,7 +360,6 @@ export default function PostAdPage() {
       autoReply:     ad.autoReply ?? '',
     });
     setError('');
-    setShowNewAccount(false);
     setView('edit');
   };
 
@@ -679,19 +370,18 @@ export default function PostAdPage() {
   const isEditSell    = view === 'edit' && editingAd?.type === 'sell';
   const editMaxPi     = editingAd?.piAmount ?? Infinity;
 
-  const sellMethodsValid  = form.type !== 'sell' || form.selectedPmIds.length > 0;
-  const buyMethodsValid   = form.type !== 'buy'  || form.acceptedTypes.length > 0;
-  /** Buy ads must have a Pi wallet selected so Pi can be released on completion */
-  const buyWalletValid    = form.type !== 'buy'  || !!selectedPiWallet;
+  const sellMethodsValid = form.type !== 'sell' || form.selectedPmIds.length > 0;
+  const buyMethodsValid  = form.type !== 'buy'  || form.acceptedTypes.length > 0;
+  const buyWalletValid   = form.type !== 'buy'  || !!selectedPiWallet;
 
   // ── Payload builder ────────────────────────────────────────────────────────
   function buildPayload() {
     const isSell         = form.type === 'sell';
     const paymentDetails = isSell
-      ? buildPaymentDetails(form.selectedPmIds, savedMethods)
+      ? buildPaymentDetails(form.selectedPmIds, savedMethodsCache)
       : [];
     const paymentMethods = isSell
-      ? buildPaymentMethodTypes(form.selectedPmIds, savedMethods)
+      ? buildPaymentMethodTypes(form.selectedPmIds, savedMethodsCache)
       : form.acceptedTypes;
 
     return {
@@ -705,7 +395,7 @@ export default function PostAdPage() {
       paymentWindow: Number(form.paymentWindow),
       terms:         form.terms,
       autoReply:     form.autoReply,
-      // For buy ads: persist the creator's Pi wallet so trades know where to release Pi
+      // Buy ads: creator's Pi wallet address (where Pi is released on trade completion)
       ...(form.type === 'buy' && selectedPiWallet
         ? { piWalletAddress: { address: selectedPiWallet.address, tag: selectedPiWallet.tag } }
         : {}),
@@ -717,9 +407,9 @@ export default function PostAdPage() {
     e.preventDefault();
     setError('');
 
-    if (!sellMethodsValid)  { setError('Select at least one payment account'); return; }
-    if (!buyMethodsValid)   { setError('Select at least one accepted payment method'); return; }
-    if (!buyWalletValid)    { setError('Select a Pi wallet address to receive Pi'); return; }
+    if (!sellMethodsValid) { setError('Select at least one payment account'); return; }
+    if (!buyMethodsValid)  { setError('Select at least one accepted payment method'); return; }
+    if (!buyWalletValid)   { setError('Select a Pi wallet address to receive Pi'); return; }
 
     if (form.type === 'sell' && wallet && wallet.piBalance < sellAdPi) {
       setShortfall(sellAdPi - wallet.piBalance);
@@ -824,7 +514,7 @@ export default function PostAdPage() {
     }
   };
 
-  // ── Action menu tracking ───────────────────────────────────────────────────
+  // ── Action-menu tracking ───────────────────────────────────────────────────
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -865,10 +555,7 @@ export default function PostAdPage() {
         {/* ── Page header ─────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1
-              className="text-3xl font-bold"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
+            <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
               My <span className="pi-text">Ads</span>
             </h1>
             <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
@@ -886,9 +573,7 @@ export default function PostAdPage() {
           summary={wallet}
           accessToken={user?.piUid ?? null}
           onDeposited={(bal) =>
-            setWallet((w) =>
-              w ? { ...w, piBalance: bal, totalHeld: bal + (w.lockedBalance ?? 0) } : w,
-            )
+            setWallet((w) => w ? { ...w, piBalance: bal, totalHeld: bal + (w.lockedBalance ?? 0) } : w)
           }
           showToast={showToast}
         />
@@ -914,9 +599,7 @@ export default function PostAdPage() {
                     key={ad._id}
                     ad={ad}
                     isMenuOpen={openMenuId === ad._id}
-                    onToggleMenu={() =>
-                      setOpenMenuId(openMenuId === ad._id ? null : ad._id)
-                    }
+                    onToggleMenu={() => setOpenMenuId(openMenuId === ad._id ? null : ad._id)}
                     menuRef={menuRef}
                     onEdit={() => { openEdit(ad); setOpenMenuId(null); }}
                     onActivate={() => { setAdStatus(ad, 'active'); setOpenMenuId(null); }}
@@ -934,10 +617,7 @@ export default function PostAdPage() {
           ════════════════════════════════════════════════════════════════ */}
           {(view === 'create' || view === 'edit') && (
             <div className="card p-8 animate-fade-in">
-              <h2
-                className="text-xl font-bold mb-1"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
+              <h2 className="text-xl font-bold mb-1" style={{ fontFamily: 'var(--font-display)' }}>
                 {view === 'create' ? 'Post New Ad' : 'Edit Ad'}
               </h2>
 
@@ -959,10 +639,7 @@ export default function PostAdPage() {
                 {/* ── Ad Type (create only) ──────────────────────────────── */}
                 {view === 'create' && (
                   <div>
-                    <label
-                      className="block text-sm font-medium mb-2"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
                       Ad Type
                     </label>
                     <div className="flex gap-3">
@@ -987,10 +664,7 @@ export default function PostAdPage() {
                 {/* ── Numeric fields ─────────────────────────────────────── */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label
-                      className="block text-sm font-medium mb-1.5"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                       Pi Amount
                       {isEditSell && (
                         <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -1008,7 +682,6 @@ export default function PostAdPage() {
                       onChange={(e) => setForm((f) => ({ ...f, piAmount: e.target.value }))}
                       required
                     />
-                    {/* Balance warning — sell + create only */}
                     {view === 'create' && form.type === 'sell' && form.piAmount && !hasSufficient && (
                       <p className="mt-1.5 text-xs flex items-center gap-1" style={{ color: '#f87171' }}>
                         ⚠ Need π{balanceShort.toFixed(4)} more —&nbsp;
@@ -1025,10 +698,7 @@ export default function PostAdPage() {
                   </div>
 
                   <div>
-                    <label
-                      className="block text-sm font-medium mb-1.5"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                       Price per Pi (₦)
                     </label>
                     <input
@@ -1041,10 +711,7 @@ export default function PostAdPage() {
                     />
                   </div>
                   <div>
-                    <label
-                      className="block text-sm font-medium mb-1.5"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                       Min Limit (₦)
                     </label>
                     <input
@@ -1057,10 +724,7 @@ export default function PostAdPage() {
                     />
                   </div>
                   <div>
-                    <label
-                      className="block text-sm font-medium mb-1.5"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                       Max Limit (₦)
                     </label>
                     <input
@@ -1085,10 +749,7 @@ export default function PostAdPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p
-                          className="text-sm font-medium"
-                          style={{ color: hasSufficient ? '#4ade80' : '#f87171' }}
-                        >
+                        <p className="text-sm font-medium" style={{ color: hasSufficient ? '#4ade80' : '#f87171' }}>
                           {hasSufficient ? '✅ Sufficient balance' : '⚠ Insufficient balance'}
                         </p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
@@ -1110,138 +771,28 @@ export default function PostAdPage() {
                 )}
 
                 {/* ════════════════════════════════════════════════════════
-                    SELL AD — pick from saved accounts or add new
+                    SELL AD — PaymentAccountPicker (multi-select)
+                    Replaces the entire inline saved-accounts section.
+                    State (savedMethods, loadingSaved, showNewAccount, etc.)
+                    is now fully encapsulated inside the component.
                 ════════════════════════════════════════════════════════ */}
                 {form.type === 'sell' && (
-                  <div>
-                    <SectionHeader
-                      label="Payment Accounts"
-                      hint="Buyers will pay to these accounts"
-                      required
-                    />
-
-                    {loadingSaved ? (
-                      <div className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
-                        Loading your accounts…
-                      </div>
-                    ) : savedMethods.length === 0 && !showNewAccount ? (
-                      <div
-                        className="rounded-xl p-5 text-center mb-3"
-                        style={{ background: 'var(--bg-elevated)', border: '1px dashed var(--border)' }}
-                      >
-                        <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                          No saved payment accounts yet. Add one below.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setShowNewAccount(true)}
-                          className="btn-pi text-sm px-4 py-2 rounded-lg"
-                        >
-                          + Add Account
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 mb-3">
-                        {savedMethods.map((pm) => {
-                          const selected = form.selectedPmIds.includes(pm._id);
-                          return (
-                            <button
-                              key={pm._id}
-                              type="button"
-                              onClick={() => toggleSavedAccount(pm._id)}
-                              className="w-full text-left rounded-xl p-4 transition-all"
-                              style={{
-                                background:  selected ? 'rgba(240,160,60,0.1)'      : 'var(--bg-elevated)',
-                                border:      `1px solid ${selected ? 'rgba(240,160,60,0.4)' : 'var(--border)'}`,
-                              }}
-                            >
-                              <div className="flex items-center gap-3">
-                                {/* Checkbox indicator */}
-                                <div
-                                  className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-                                  style={{
-                                    background: selected ? 'var(--pi-gold)' : 'transparent',
-                                    border:     `2px solid ${selected ? 'var(--pi-gold)' : 'var(--border)'}`,
-                                  }}
-                                >
-                                  {selected && (
-                                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                      <path
-                                        d="M1 4l3 3 5-6"
-                                        stroke="#0a0a0b"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                      />
-                                    </svg>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className="font-semibold text-sm"
-                                      style={{ color: selected ? 'var(--pi-gold)' : 'var(--text-primary)' }}
-                                    >
-                                      {pm.accountName}
-                                    </span>
-                                    {pm.isDefault && (
-                                      <span
-                                        className="text-xs px-1.5 py-0.5 rounded"
-                                        style={{ background: 'rgba(240,160,60,0.15)', color: 'var(--pi-gold)' }}
-                                      >
-                                        Default
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                                    {PAYMENT_METHOD_LABELS[pm.type]}
-                                    {pm.bankName && ` · ${pm.bankName}`}
-                                    {' · '}
-                                    <span style={{ fontFamily: 'var(--font-mono)' }}>
-                                      {pm.accountNumber}
-                                    </span>
-                                  </p>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-
-                        {!showNewAccount && (
-                          <button
-                            type="button"
-                            onClick={() => setShowNewAccount(true)}
-                            className="w-full rounded-xl p-3 text-sm transition-all"
-                            style={{
-                              background:  'transparent',
-                              border:      '1px dashed var(--border)',
-                              color:       'var(--text-muted)',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(240,160,60,0.3)'; e.currentTarget.style.color = 'var(--pi-gold)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)';         e.currentTarget.style.color = 'var(--text-muted)'; }}
-                          >
-                            + Add new payment account
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {showNewAccount && (
-                      <NewAccountForm
-                        account={newAccount}
-                        saving={savingAccount}
-                        onChange={(patch) => setNewAccount((a) => ({ ...a, ...patch }))}
-                        onSave={handleAddNewAccount}
-                        onCancel={() => { setShowNewAccount(false); setNewAccount(BLANK_ACCOUNT); }}
-                      />
-                    )}
-
-                    {form.selectedPmIds.length === 0 && !showNewAccount && savedMethods.length > 0 && (
-                      <p className="text-xs mt-2" style={{ color: '#f87171' }}>
-                        Select at least one account for buyers to pay to.
-                      </p>
-                    )}
-                  </div>
+                  <PaymentAccountPicker
+                    multi
+                    selectedIds={form.selectedPmIds}
+                    onToggle={toggleSavedAccount}
+                    onNewSaved={(account) => {
+                      // Keep cache in sync and auto-select the new account
+                      setSavedMethodsCache((prev) => [...prev, account]);
+                      setForm((f) => ({
+                        ...f,
+                        selectedPmIds: [...f.selectedPmIds, account._id],
+                      }));
+                    }}
+                    label="Payment Accounts"
+                    hint="Buyers will pay to these accounts"
+                    required
+                  />
                 )}
 
                 {/* ════════════════════════════════════════════════════════
@@ -1250,11 +801,14 @@ export default function PostAdPage() {
                 {form.type === 'buy' && (
                   <div className="space-y-5">
                     <div>
-                      <SectionHeader
-                        label="Accepted Payment Methods"
-                        hint="How you want sellers to pay you"
-                        required
-                      />
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          Accepted Payment Methods <span style={{ color: '#f87171' }}>*</span>
+                        </label>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          How you want sellers to pay you
+                        </span>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {ALL_PAYMENT_TYPES.map((t) => {
                           const active = form.acceptedTypes.includes(t);
@@ -1283,7 +837,7 @@ export default function PostAdPage() {
                       )}
                     </div>
 
-                    {/* Pi wallet picker — address Pi is released to when trade completes */}
+                    {/* Pi wallet picker */}
                     <PiWalletPicker
                       selectedPiWallet={selectedPiWallet}
                       setSelectedPiWallet={setSelectedPiWallet}
@@ -1294,10 +848,7 @@ export default function PostAdPage() {
                 {/* ── Payment Window ─────────────────────────────────────── */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label
-                      className="block text-sm font-medium mb-1.5"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
+                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                       Payment Window
                     </label>
                     <select
@@ -1314,10 +865,7 @@ export default function PostAdPage() {
 
                 {/* ── Terms ──────────────────────────────────────────────── */}
                 <div>
-                  <label
-                    className="block text-sm font-medium mb-1.5"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                     Terms (optional)
                   </label>
                   <textarea
@@ -1332,10 +880,7 @@ export default function PostAdPage() {
 
                 {/* ── Auto-reply ─────────────────────────────────────────── */}
                 <div>
-                  <label
-                    className="block text-sm font-medium mb-1.5"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
                     Auto-reply (optional)
                   </label>
                   <input
@@ -1389,9 +934,7 @@ export default function PostAdPage() {
               : undefined
           }
           onDepositComplete={(newBal) => {
-            setWallet((w) =>
-              w ? { ...w, piBalance: newBal, totalHeld: newBal + (w.lockedBalance ?? 0) } : w,
-            );
+            setWallet((w) => w ? { ...w, piBalance: newBal, totalHeld: newBal + (w.lockedBalance ?? 0) } : w);
             setShowDeposit(false);
             showToast('Deposit confirmed — you can now post your ad');
           }}

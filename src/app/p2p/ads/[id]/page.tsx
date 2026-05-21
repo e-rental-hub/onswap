@@ -1,24 +1,24 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Navbar         from '@/components/layout/Navbar';
-import { DepositModal } from '@/components/p2p/DepositModal';
-import PiWalletPicker from '@/components/p2p/PiWalletAddressPicker';
+import Navbar              from '@/components/layout/Navbar';
+import { DepositModal }    from '@/components/p2p/DepositModal';
+import PiWalletPicker      from '@/components/p2p/PiWalletAddressPicker';
+import PaymentAccountPicker from '@/components/p2p/paymentAccountPicker';
 import { adsApi, ordersApi, walletApi } from '@/lib/api';
-import { useAuth }    from '@/hooks/useAuth';
+import { useAuth }         from '@/hooks/useAuth';
 import {
-  Ad, AdPaymentDetail, PaymentMethodType,
+  Ad, AdPaymentDetail, PaymentMethodDetail, PaymentMethodType,
   PAYMENT_METHOD_LABELS, WalletSummary, PiWalletAddress,
 } from '@/types';
 import { logger } from '@/lib/logger';
 
-// ─── View state machine ───────────────────────────────────────────────────────
+// ─── State machine / input mode ───────────────────────────────────────────────
 type Step      = 'configure' | 'summary' | 'depositing' | 'done';
 type InputMode = 'pi' | 'ngn';
 
 // ─── Reusable sub-components ──────────────────────────────────────────────────
 
-/** Inline error banner */
 function ErrorBanner({ message }: { message: string }) {
   if (!message) return null;
   return (
@@ -26,8 +26,8 @@ function ErrorBanner({ message }: { message: string }) {
       className="mb-4 px-3 py-2.5 rounded-lg text-sm"
       style={{
         background: 'rgba(239,68,68,0.1)',
-        color: '#f87171',
-        border: '1px solid rgba(239,68,68,0.2)',
+        color:      '#f87171',
+        border:     '1px solid rgba(239,68,68,0.2)',
       }}
     >
       {message}
@@ -35,31 +35,21 @@ function ErrorBanner({ message }: { message: string }) {
   );
 }
 
-/** Summary row used inside the order-summary table */
 function SummaryRow({
-  label,
-  value,
-  mono = false,
-  highlight = false,
-  last = false,
+  label, value, mono = false, highlight = false, last = false,
 }: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  highlight?: boolean;
-  last?: boolean;
+  label: string; value: string;
+  mono?: boolean; highlight?: boolean; last?: boolean;
 }) {
   return (
     <div
       className="flex justify-between items-center px-4 py-3"
       style={{
         borderBottom: last ? 'none' : '1px solid var(--border-subtle)',
-        background: 'var(--bg-elevated)',
+        background:   'var(--bg-elevated)',
       }}
     >
-      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-        {label}
-      </span>
+      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span
         className="text-sm font-semibold"
         style={{
@@ -73,60 +63,22 @@ function SummaryRow({
   );
 }
 
-/** Payment-method selector chips */
-function PaymentMethodPicker({
-  methods,
-  selected,
-  onSelect,
-}: {
-  methods: PaymentMethodType[];
-  selected: PaymentMethodType | '';
-  onSelect: (pm: PaymentMethodType) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {methods.map((pm) => {
-        const active = selected === pm;
-        return (
-          <button
-            key={pm}
-            type="button"
-            onClick={() => onSelect(pm)}
-            className="px-3 py-2 rounded-lg border text-sm transition-all"
-            style={{
-              background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
-              color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
-              borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
-            }}
-          >
-            {active && '✓ '}
-            {PAYMENT_METHOD_LABELS[pm]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Wallet balance badge shown on configure step for buy-ads */
+/** Balance badge — hidden while wallet is still loading (wallet === null) */
 function WalletBalanceBadge({
   wallet,
   piRequired,
 }: {
-  wallet: WalletSummary | null;
+  wallet:     WalletSummary | null;
   piRequired: number;
 }) {
-  // Don't render while wallet is still loading
   if (!wallet) return null;
-
   const sufficient = piRequired <= 0 || wallet.piBalance >= piRequired;
   const shortfall  = Math.max(0, piRequired - wallet.piBalance);
-
   return (
     <div
       className="rounded-xl p-3 mb-5 text-sm"
       style={{
-        background: sufficient ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+        background: sufficient ? 'rgba(34,197,94,0.06)'  : 'rgba(239,68,68,0.06)',
         border:     `1px solid ${sufficient ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
       }}
     >
@@ -147,21 +99,18 @@ function WalletBalanceBadge({
   );
 }
 
-/** Seller payment detail card shown in summary step */
+/** "YOU WILL PAY TO" card shown in the sell-ad summary step */
 function SellerPaymentCard({
   detail,
   nairaAmount,
 }: {
-  detail: AdPaymentDetail;
+  detail:      AdPaymentDetail;
   nairaAmount: number;
 }) {
   return (
     <div
       className="rounded-xl p-4 mb-5"
-      style={{
-        background: 'rgba(240,160,60,0.07)',
-        border: '1px solid rgba(240,160,60,0.2)',
-      }}
+      style={{ background: 'rgba(240,160,60,0.07)', border: '1px solid rgba(240,160,60,0.2)' }}
     >
       <p className="text-xs font-bold mb-3" style={{ color: 'var(--pi-gold)' }}>
         💳 YOU WILL PAY TO
@@ -170,22 +119,13 @@ function SellerPaymentCard({
         {detail.accountName && (
           <p>
             <span style={{ color: 'var(--text-muted)' }}>Name: </span>
-            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-              {detail.accountName}
-            </span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{detail.accountName}</span>
           </p>
         )}
         {detail.accountNumber && (
           <p>
             <span style={{ color: 'var(--text-muted)' }}>Account: </span>
-            <span
-              style={{
-                color: 'var(--pi-gold)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '1rem',
-                fontWeight: 700,
-              }}
-            >
+            <span style={{ color: 'var(--pi-gold)', fontFamily: 'var(--font-mono)', fontSize: '1rem', fontWeight: 700 }}>
               {detail.accountNumber}
             </span>
           </p>
@@ -202,32 +142,78 @@ function SellerPaymentCard({
         style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-secondary)' }}
       >
         After placing the order, Pi will be locked in escrow. Transfer exactly{' '}
-        <strong style={{ color: 'var(--pi-gold)' }}>
-          ₦{nairaAmount.toLocaleString()}
-        </strong>{' '}
-        and then click "I've Paid".
+        <strong style={{ color: 'var(--pi-gold)' }}>₦{nairaAmount.toLocaleString()}</strong> and
+        then click "I've Paid".
       </p>
     </div>
   );
 }
 
-/** Pi-lock notice shown on summary step for buy-ads */
+/**
+ * "YOUR PAYMENT DETAILS" card shown in the buy-ad summary step.
+ * Confirms back to the Pi seller which account the buyer will pay into.
+ */
+function SellerAccountConfirmCard({
+  account,
+}: {
+  account: PaymentMethodDetail;
+}) {
+  return (
+    <div
+      className="rounded-xl p-4 mb-5"
+      style={{ background: 'rgba(240,160,60,0.07)', border: '1px solid rgba(240,160,60,0.2)' }}
+    >
+      <p className="text-xs font-bold mb-3" style={{ color: 'var(--pi-gold)' }}>
+        💳 BUYER WILL PAY TO YOUR ACCOUNT
+      </p>
+      <div className="space-y-1.5 text-sm">
+        <p>
+          <span style={{ color: 'var(--text-muted)' }}>Name: </span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{account.accountName}</span>
+        </p>
+        <p>
+          <span style={{ color: 'var(--text-muted)' }}>Account: </span>
+          <span style={{ color: 'var(--pi-gold)', fontFamily: 'var(--font-mono)', fontSize: '1rem', fontWeight: 700 }}>
+            {account.accountNumber}
+          </span>
+        </p>
+        {account.bankName && (
+          <p>
+            <span style={{ color: 'var(--text-muted)' }}>Bank: </span>
+            <span style={{ color: 'var(--text-primary)' }}>{account.bankName}</span>
+          </p>
+        )}
+        <p>
+          <span style={{ color: 'var(--text-muted)' }}>Type: </span>
+          <span style={{ color: 'var(--text-secondary)' }}>{PAYMENT_METHOD_LABELS[account.type]}</span>
+        </p>
+      </div>
+      <p
+        className="text-xs mt-3 p-2 rounded-lg"
+        style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-secondary)' }}
+      >
+        The ad creator will send{' '}
+        <strong style={{ color: 'var(--pi-gold)' }}>Naira</strong> to this account after you
+        lock Pi in escrow. Ensure these details are correct before confirming.
+      </p>
+    </div>
+  );
+}
+
+/** Pi-lock notice shown on buy-ad summary step */
 function EscrowLockNotice({
   piAmount,
   nairaAmount,
   balanceAfterLock,
 }: {
-  piAmount: number;
-  nairaAmount: number;
+  piAmount:         number;
+  nairaAmount:      number;
   balanceAfterLock: number;
 }) {
   return (
     <div
       className="rounded-xl p-4 mb-5"
-      style={{
-        background: 'rgba(239,68,68,0.06)',
-        border: '1px solid rgba(239,68,68,0.2)',
-      }}
+      style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}
     >
       <p className="text-xs font-bold mb-2" style={{ color: '#f87171' }}>
         🔒 PI WILL BE LOCKED
@@ -250,18 +236,29 @@ export default function AdDetailPage() {
   const router   = useRouter();
   const { user, isAuthenticated, isDevMode } = useAuth();
 
-  const [ad,             setAd]             = useState<Ad | null>(null);
-  const [loading,        setLoading]        = useState(true);
-  const [step,           setStep]           = useState<Step>('configure');
-  const [inputMode,      setInputMode]      = useState<InputMode>('pi');
-  const [rawInput,       setRawInput]       = useState('');
-  const [selectedPm,     setSelectedPm]     = useState<PaymentMethodType | ''>('');
-  const [wallet,         setWallet]         = useState<WalletSummary | null>(null);
-  const [walletLoaded,   setWalletLoaded]   = useState(false);
-  const [creating,       setCreating]       = useState(false);
-  const [error,          setError]          = useState('');
-  // Replaces the old walletAddr string — now managed by PiWalletPicker
-  const [selectedPiWallet, setSelectedPiWallet] = useState<PiWalletAddress | null>(null);
+  const [ad,               setAd]               = useState<Ad | null>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [step,             setStep]             = useState<Step>('configure');
+  const [inputMode,        setInputMode]        = useState<InputMode>('pi');
+  const [rawInput,         setRawInput]         = useState('');
+  const [wallet,           setWallet]           = useState<WalletSummary | null>(null);
+  const [walletLoaded,     setWalletLoaded]     = useState(false);
+  const [creating,         setCreating]         = useState(false);
+  const [error,            setError]            = useState('');
+
+  // ── For sell-ad (viewer is buyer): which payment method they'll use ────────
+  // Kept as a simple type selector since the buyer pays to the ad creator's
+  // pre-set accounts — no account details needed from the buyer.
+  const [selectedPm, setSelectedPm] = useState<PaymentMethodType | ''>('');
+
+  // ── For buy-ad (viewer is Pi seller): which of their own payment accounts
+  //    the ad creator should send Naira to ───────────────────────────────────
+  const [selectedPaymentAccount, setSelectedPaymentAccount] =
+    useState<PaymentMethodDetail | null>(null);
+
+  // ── Where Pi is released to on trade completion ───────────────────────────
+  const [selectedPiWallet, setSelectedPiWallet] =
+    useState<PiWalletAddress | null>(null);
 
   // ── Load ad ─────────────────────────────────────────────────────────────────
   const fetchAd = useCallback(async () => {
@@ -286,8 +283,8 @@ export default function AdDetailPage() {
     } catch (e) {
       logger.error('fetchWallet error:', e);
     } finally {
-      // Mark wallet as loaded regardless of success so the balance check
-      // in handleProceed doesn't fire prematurely on a null wallet.
+      // Mark loaded regardless so a null wallet doesn't prematurely
+      // trigger the deposit modal in handleProceed.
       setWalletLoaded(true);
     }
   }, [isAuthenticated]);
@@ -299,7 +296,6 @@ export default function AdDetailPage() {
   const rawNum      = parseFloat(rawInput) || 0;
   const piAmount    = inputMode === 'pi'  ? rawNum : rawNum / pricePerPi;
   const nairaAmount = inputMode === 'ngn' ? rawNum : rawNum * pricePerPi;
-
   const piRounded    = Math.floor(piAmount * 10000) / 10000;
   const nairaRounded = Math.round(nairaAmount * 100) / 100;
 
@@ -308,20 +304,28 @@ export default function AdDetailPage() {
     if (!ad)              return 'Ad not loaded';
     if (!isAuthenticated) return 'Log in to trade';
     if (piRounded <= 0)   return 'Enter an amount';
-    if (piRounded > ad.availableAmount) return `Only ${ad.availableAmount}π available`;
-    if (nairaRounded < ad.minLimit)     return `Minimum is ₦${ad.minLimit.toLocaleString()}`;
-    if (nairaRounded > ad.maxLimit)     return `Maximum is ₦${ad.maxLimit.toLocaleString()}`;
-    // if (!selectedPm)                    return 'Choose a payment method';
+    if (piRounded > ad.availableAmount)
+      return `Only ${ad.availableAmount}π available`;
+    if (nairaRounded < ad.minLimit)
+      return `Minimum is ₦${ad.minLimit.toLocaleString()}`;
+    if (nairaRounded > ad.maxLimit)
+      return `Maximum is ₦${ad.maxLimit.toLocaleString()}`;
+    // sell-ad (buyer flow): they must choose a payment method type
+    if (ad.type === 'sell' && !selectedPm)
+      return 'Choose a payment method';
+    // buy-ad (Pi seller flow): they must pick one of their own payment accounts
+    if (ad.type === 'buy' && !selectedPaymentAccount)
+      return 'Select a payment account to receive Naira';
     return '';
   }
 
-  /** Validates the selected Pi wallet address for receiving Pi */
   function validatePiWallet(): string {
     if (!selectedPiWallet) return 'Select or add a Pi wallet address to receive Pi';
     return '';
   }
 
   const validationError = validate();
+
   const isOwn = !isDevMode && !!user && !!ad && (
     ad.creator.id === user.id ||
     (ad.creator as unknown as { _id: string })._id === user.id
@@ -333,12 +337,9 @@ export default function AdDetailPage() {
     if (err) { setError(err); return; }
     setError('');
 
-    // Buy-ad flow: the current user is the Pi SELLER — they need a wallet balance.
-    // Only trigger the deposit modal after the wallet fetch has completed so we
-    // never incorrectly treat a null (loading) wallet as "insufficient".
+    // Buy-ad: viewer is Pi seller — must have sufficient in-app balance
     if (ad!.type === 'buy') {
       if (!walletLoaded) {
-        // Wallet still loading — don't proceed yet
         setError('Checking your wallet balance…');
         return;
       }
@@ -363,17 +364,30 @@ export default function AdDetailPage() {
     setError('');
     try {
       const res = await ordersApi.createOrder({
-        adId:               id,
-        piAmount:           piRounded,
-        paymentMethod:      selectedPm as string,
-        // Send the selected wallet address string to the backend
+        adId:          id,
+        piAmount:      piRounded,
+        paymentMethod: (isBuyAd ? selectedPaymentAccount!.type : selectedPm) as string,
+        // Destination wallet for Pi release
         buyerWalletAddress: selectedPiWallet!.address,
+        // For buy-ads: the Pi seller's Naira receiving account
+        ...(isBuyAd && selectedPaymentAccount
+          ? {
+              sellerPaymentDetail: {
+                type:          selectedPaymentAccount.type,
+                accountName:   selectedPaymentAccount.accountName,
+                accountNumber: selectedPaymentAccount.accountNumber,
+                bankName:      selectedPaymentAccount.bankName,
+              },
+            }
+          : {}),
       });
       setStep('done');
       logger.info(`Order created: ${res.data.order._id}`);
       setTimeout(() => router.push(`/p2p/orders/${res.data.order._id}`), 1200);
     } catch (err: unknown) {
-      const data = (err as { response?: { data?: { message?: string; needsDeposit?: boolean } } })?.response?.data;
+      const data = (err as {
+        response?: { data?: { message?: string; needsDeposit?: boolean } };
+      })?.response?.data;
       if (data?.needsDeposit) {
         setStep('depositing');
       } else {
@@ -397,9 +411,9 @@ export default function AdDetailPage() {
               key={i}
               className="rounded-lg"
               style={{
-                height: h,
+                height:     h,
                 background: 'var(--bg-elevated)',
-                width: i % 2 === 0 ? '60%' : '40%',
+                width:      i % 2 === 0 ? '60%' : '40%',
               }}
             />
           ))}
@@ -417,21 +431,27 @@ export default function AdDetailPage() {
     </div>
   );
 
-  const isBuyAd  = ad.type === 'buy';
-  const isSellAd = ad.type === 'sell';
+  const isBuyAd  = ad.type === 'buy';   // ad creator wants to buy Pi → viewer sells
+  const isSellAd = ad.type === 'sell';  // ad creator wants to sell Pi → viewer buys
 
   const actionLabel = isBuyAd ? 'Sell Pi'    : 'Buy Pi';
   const ctaColor    = isBuyAd ? 'btn-sell'   : 'btn-buy';
   const accentColor = isBuyAd ? '#f87171'    : '#4ade80';
   const badgeClass  = isBuyAd ? 'badge-sell' : 'badge-buy';
 
+  // For sell-ad summary: match the payment detail the viewer chose
   const matchedDetail: AdPaymentDetail | undefined = isSellAd
     ? ad.paymentDetails.find((d) => d.type === selectedPm)
     : undefined;
 
-  // Suggested deposit = shortfall grossed up for the 1% deposit fee
+  // Deposit suggestion: shortfall grossed up for the 1% deposit fee
   const piShortfall      = Math.max(0, piRounded - (wallet?.piBalance ?? 0));
   const suggestedDeposit = Math.ceil((piShortfall / (1 - 0.01)) * 10000) / 10000;
+
+  // Payment method label to show in summary (buy-ad: use selected account type)
+  const summaryPaymentLabel = isBuyAd && selectedPaymentAccount
+    ? PAYMENT_METHOD_LABELS[selectedPaymentAccount.type]
+    : PAYMENT_METHOD_LABELS[selectedPm as PaymentMethodType] ?? '—';
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -444,9 +464,7 @@ export default function AdDetailPage() {
           suggestedAmount={suggestedDeposit}
           onDepositComplete={(newBal) => {
             setWallet((w) => w ? { ...w, piBalance: newBal } : w);
-            if (newBal >= piRounded) {
-              setStep('summary');
-            }
+            if (newBal >= piRounded) setStep('summary');
             // If still insufficient the modal stays open
           }}
           onClose={() => setStep('configure')}
@@ -478,18 +496,15 @@ export default function AdDetailPage() {
                     className="w-11 h-11 rounded-full flex items-center justify-center font-bold"
                     style={{
                       background: 'rgba(240,160,60,0.12)',
-                      border: '1px solid rgba(240,160,60,0.2)',
-                      color: 'var(--pi-gold)',
+                      border:     '1px solid rgba(240,160,60,0.2)',
+                      color:      'var(--pi-gold)',
                     }}
                   >
                     {ad.creator.displayName?.[0]?.toUpperCase()}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className="font-semibold text-sm"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
+                      <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
                         {ad.creator.displayName}
                       </span>
                       {ad.creator.kycVerified && (
@@ -497,8 +512,8 @@ export default function AdDetailPage() {
                           className="text-xs px-1.5 py-0.5 rounded"
                           style={{
                             background: 'rgba(34,197,94,0.1)',
-                            color: '#4ade80',
-                            border: '1px solid rgba(34,197,94,0.2)',
+                            color:      '#4ade80',
+                            border:     '1px solid rgba(34,197,94,0.2)',
                           }}
                         >
                           ✓ KYC
@@ -569,9 +584,9 @@ export default function AdDetailPage() {
                       key={pm}
                       className="text-xs px-3 py-1.5 rounded-lg border"
                       style={{
-                        background:   'rgba(240,160,60,0.07)',
-                        color:        'var(--text-secondary)',
-                        borderColor:  'rgba(240,160,60,0.15)',
+                        background:  'rgba(240,160,60,0.07)',
+                        color:       'var(--text-secondary)',
+                        borderColor: 'rgba(240,160,60,0.15)',
                       }}
                     >
                       {PAYMENT_METHOD_LABELS[pm]}
@@ -589,17 +604,14 @@ export default function AdDetailPage() {
                   <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>
                     TERMS
                   </p>
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                     {ad.terms}
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Sell-ad: seller account details (visible upfront to buyers) */}
+            {/* Sell-ad: seller payment accounts (visible upfront) */}
             {isSellAd && ad.paymentDetails.length > 0 && (
               <div className="card p-6">
                 <p className="text-xs font-medium mb-4" style={{ color: 'var(--text-muted)' }}>
@@ -638,7 +650,7 @@ export default function AdDetailPage() {
           <div className="lg:col-span-2">
             <div className="card p-6 sticky top-24">
 
-              {/* Own ad — no self-trade */}
+              {/* Own ad */}
               {isOwn && (
                 <div className="text-center py-10">
                   <p className="text-3xl mb-3">🚫</p>
@@ -664,7 +676,7 @@ export default function AdDetailPage() {
                 </div>
               )}
 
-              {/* ── CONFIGURE step ── */}
+              {/* ── CONFIGURE ── */}
               {!isOwn && isAuthenticated && step === 'configure' && (
                 <>
                   <h2
@@ -688,8 +700,8 @@ export default function AdDetailPage() {
                         onClick={() => { setInputMode(mode); setRawInput(''); }}
                         className="flex-1 py-2 rounded-lg text-sm font-medium transition-all"
                         style={{
-                          background: inputMode === mode ? 'var(--bg-card)' : 'transparent',
-                          color:      inputMode === mode ? 'var(--text-primary)' : 'var(--text-muted)',
+                          background: inputMode === mode ? 'var(--bg-card)'       : 'transparent',
+                          color:      inputMode === mode ? 'var(--text-primary)'  : 'var(--text-muted)',
                           border:     inputMode === mode ? '1px solid var(--border)' : '1px solid transparent',
                         }}
                       >
@@ -709,9 +721,7 @@ export default function AdDetailPage() {
                     <div className="relative">
                       <span
                         className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-sm"
-                        style={{
-                          color: inputMode === 'pi' ? 'var(--pi-gold)' : 'var(--text-secondary)',
-                        }}
+                        style={{ color: inputMode === 'pi' ? 'var(--pi-gold)' : 'var(--text-secondary)' }}
                       >
                         {inputMode === 'pi' ? 'π' : '₦'}
                       </span>
@@ -733,7 +743,7 @@ export default function AdDetailPage() {
                       className="rounded-xl p-3 mb-4 text-sm space-y-1.5"
                       style={{
                         background: 'rgba(240,160,60,0.06)',
-                        border: '1px solid rgba(240,160,60,0.15)',
+                        border:     '1px solid rgba(240,160,60,0.15)',
                       }}
                     >
                       <div className="flex justify-between">
@@ -757,14 +767,62 @@ export default function AdDetailPage() {
                     </div>
                   )}
 
-                  {/* Remaining / limits */}
+                  {/* Remaining / limits info */}
                   <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
                     {ad.availableAmount.toFixed(4)}π remaining · Limit ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
                   </p>
 
-                  {/* Buy-ad: show wallet balance (only after wallet has loaded) */}
+                  {/* ── SELL-AD (viewer is buyer): choose payment method type ── */}
+                  {isSellAd && (
+                    <div className="mb-5">
+                      <label
+                        className="block text-xs font-medium mb-2"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        Payment Method
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {ad.paymentMethods.map((pm) => {
+                          const active = selectedPm === pm;
+                          return (
+                            <button
+                              key={pm}
+                              type="button"
+                              onClick={() => setSelectedPm(pm)}
+                              className="px-3 py-2 rounded-lg border text-sm transition-all"
+                              style={{
+                                background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
+                                color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
+                                borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
+                              }}
+                            >
+                              {active && '✓ '}{PAYMENT_METHOD_LABELS[pm]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── BUY-AD (viewer is Pi seller): pick their own payment account ── */}
                   {isBuyAd && (
-                    <WalletBalanceBadge wallet={walletLoaded ? wallet : null} piRequired={piRounded} />
+                    <div className="mb-5">
+                      <PaymentAccountPicker
+                        selectedAccount={selectedPaymentAccount}
+                        setSelectedAccount={setSelectedPaymentAccount}
+                        label="Your Naira Receiving Account"
+                        hint="Buyer sends Naira here"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Buy-ad: wallet balance (shown only after wallet loaded) */}
+                  {isBuyAd && (
+                    <WalletBalanceBadge
+                      wallet={walletLoaded ? wallet : null}
+                      piRequired={piRounded}
+                    />
                   )}
 
                   {/* CTA */}
@@ -784,7 +842,7 @@ export default function AdDetailPage() {
                 </>
               )}
 
-              {/* ── SUMMARY step ── */}
+              {/* ── SUMMARY ── */}
               {!isOwn && isAuthenticated && step === 'summary' && (
                 <>
                   <div className="flex items-center gap-2 mb-5">
@@ -813,13 +871,18 @@ export default function AdDetailPage() {
                     <SummaryRow label="Pi Amount"    value={`π${piRounded.toFixed(4)}`}         mono highlight />
                     <SummaryRow label="Naira Amount" value={`₦${nairaRounded.toLocaleString()}`} mono />
                     <SummaryRow label="Rate"         value={`₦${pricePerPi.toLocaleString()}/π`} />
-                    <SummaryRow label="Payment"      value={PAYMENT_METHOD_LABELS[selectedPm as PaymentMethodType]} />
+                    <SummaryRow label="Payment"      value={summaryPaymentLabel} />
                     <SummaryRow label="Pay Window"   value={`${ad.paymentWindow} min`}           last />
                   </div>
 
-                  {/* Sell-ad: payment instructions for buyer */}
+                  {/* Sell-ad: tell buyer where to pay */}
                   {isSellAd && matchedDetail && (
                     <SellerPaymentCard detail={matchedDetail} nairaAmount={nairaRounded} />
+                  )}
+
+                  {/* Buy-ad: confirm Pi seller's receiving account */}
+                  {isBuyAd && selectedPaymentAccount && (
+                    <SellerAccountConfirmCard account={selectedPaymentAccount} />
                   )}
 
                   {/* Buy-ad: escrow lock notice */}
@@ -831,21 +894,15 @@ export default function AdDetailPage() {
                     />
                   )}
 
-                  {/* Pi wallet picker — where Pi will be released to */}
+                  {/* Pi wallet picker — where Pi is released on completion */}
                   <div className="mb-5">
                     <PiWalletPicker
                       selectedPiWallet={selectedPiWallet}
                       setSelectedPiWallet={setSelectedPiWallet}
                     />
-                    {/* Show validation error only after user has interacted */}
-                    {error && error.includes('wallet') && (
-                      <p className="text-xs mt-2" style={{ color: '#f87171' }}>
-                        {error}
-                      </p>
-                    )}
                   </div>
 
-                  {/* Confirm button */}
+                  {/* Confirm */}
                   <button
                     onClick={handleCreateOrder}
                     disabled={creating || !!validatePiWallet()}
@@ -858,24 +915,17 @@ export default function AdDetailPage() {
                       : '💳 Place Order'}
                   </button>
 
-                  <p
-                    className="text-xs text-center mt-3"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    By confirming, you agree to complete the trade within{' '}
-                    {ad.paymentWindow} minutes.
+                  <p className="text-xs text-center mt-3" style={{ color: 'var(--text-muted)' }}>
+                    By confirming, you agree to complete the trade within {ad.paymentWindow} minutes.
                   </p>
                 </>
               )}
 
-              {/* ── DONE step ── */}
+              {/* ── DONE ── */}
               {step === 'done' && (
                 <div className="text-center py-10">
                   <div className="text-5xl mb-4">🎉</div>
-                  <h3
-                    className="font-bold text-lg mb-2"
-                    style={{ color: accentColor }}
-                  >
+                  <h3 className="font-bold text-lg mb-2" style={{ color: accentColor }}>
                     Order Created!
                   </h3>
                   <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -883,6 +933,7 @@ export default function AdDetailPage() {
                   </p>
                 </div>
               )}
+
             </div>
           </div>
 
