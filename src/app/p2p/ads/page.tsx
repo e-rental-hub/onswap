@@ -519,7 +519,7 @@ function NewAccountForm({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PostAdPage() {
-  const { isAuthenticated, user, addPaymentMethod, addPiWalletAddress } = useAuth();
+  const { isAuthenticated, user, addPaymentMethod } = useAuth();
   const router  = useRouter();
   const { toast, toastErr, showToast } = useToast();
 
@@ -656,16 +656,16 @@ export default function PostAdPage() {
       if (match) selectedIds.push(match._id);
     }
     setForm({
-      type:             ad.type,
-      piAmount:         String(ad.piAmount),
-      minLimit:         String(ad.minLimit),
-      maxLimit:         String(ad.maxLimit),
-      pricePerPi:       String(ad.pricePerPi),
-      selectedPmIds:    selectedIds,
-      acceptedTypes:    ad.type === 'buy' ? [...ad.paymentMethods] : [],
-      paymentWindow:    String(ad.paymentWindow),
-      terms:            ad.terms     ?? '',
-      autoReply:        ad.autoReply ?? '',
+      type:          ad.type,
+      piAmount:      String(ad.piAmount),
+      minLimit:      String(ad.minLimit),
+      maxLimit:      String(ad.maxLimit),
+      pricePerPi:    String(ad.pricePerPi),
+      selectedPmIds: selectedIds,
+      acceptedTypes: ad.type === 'buy' ? [...ad.paymentMethods] : [],
+      paymentWindow: String(ad.paymentWindow),
+      terms:         ad.terms     ?? '',
+      autoReply:     ad.autoReply ?? '',
     });
     setError('');
     setShowNewAccount(false);

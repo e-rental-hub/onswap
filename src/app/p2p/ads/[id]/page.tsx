@@ -245,84 +245,6 @@ function EscrowLockNotice({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-// ─── InlineWalletForm ─────────────────────────────────────────────────────────
-// Shared sub-component used both when user has no saved wallets (standalone)
-// and when adding a new wallet to an existing list (with cancel).
-
-interface InlineWalletFormProps {
-  newWalletAddr:    string;
-  setNewWalletAddr: (v: string) => void;
-  newWalletTag:     string;
-  setNewWalletTag:  (v: string) => void;
-  stellarRe:        RegExp;
-  saving:           boolean;
-  onCancel:         (() => void) | undefined;
-  onSave:           (() => Promise<void>) | undefined;
-}
-
-function InlineWalletForm({
-  newWalletAddr, setNewWalletAddr,
-  newWalletTag,  setNewWalletTag,
-  stellarRe, saving, onCancel, onSave,
-}: InlineWalletFormProps) {
-  const addrValid = stellarRe.test(newWalletAddr.trim());
-  const canSave   = !!newWalletTag.trim() && addrValid;
-
-  return (
-    <div className="rounded-xl p-4 space-y-3"
-      style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(240,160,60,0.2)' }}>
-      {onCancel && (
-        <div className="flex justify-between items-center">
-          <p className="text-xs font-semibold" style={{ color: 'var(--pi-gold)' }}>New Wallet Address</p>
-          <button type="button" onClick={onCancel}
-            className="text-xs" style={{ color: 'var(--text-muted)' }}>Cancel</button>
-        </div>
-      )}
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-          Tag / Label *
-        </label>
-        <input className="input-dark text-sm w-full"
-          placeholder="e.g. My Pi Wallet, Main Wallet"
-          value={newWalletTag}
-          onChange={(e) => setNewWalletTag(e.target.value)} />
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-          Pi Wallet Address (G…) *
-        </label>
-        <input
-          className="input-dark text-sm w-full"
-          style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.02em' }}
-          placeholder="G… (56 characters)"
-          maxLength={56}
-          spellCheck={false}
-          value={newWalletAddr}
-          onChange={(e) => setNewWalletAddr(e.target.value.trim())}
-        />
-        {newWalletAddr && !addrValid && (
-          <p className="text-xs mt-1" style={{ color: '#f87171' }}>
-            Must start with G and be exactly 56 characters
-          </p>
-        )}
-        {newWalletAddr && addrValid && (
-          <p className="text-xs mt-1" style={{ color: '#4ade80' }}>✓ Valid Pi wallet address</p>
-        )}
-      </div>
-
-      {onSave && (
-        <button type="button" onClick={onSave}
-          disabled={saving || !canSave}
-          className="btn-pi w-full py-2 rounded-xl text-sm">
-          {saving ? 'Saving…' : 'Save & Select'}
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function AdDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
@@ -370,6 +292,8 @@ export default function AdDetailPage() {
     }
   }, [isAuthenticated]);
 
+  useEffect(() => { fetchAd(); fetchWallet(); }, [fetchAd, fetchWallet]);
+
   // ── Derived amounts ──────────────────────────────────────────────────────────
   const pricePerPi  = ad?.pricePerPi ?? 0;
   const rawNum      = parseFloat(rawInput) || 0;
@@ -396,6 +320,7 @@ export default function AdDetailPage() {
     if (!selectedPiWallet) return 'Select or add a Pi wallet address to receive Pi';
     return '';
   }
+
   const validationError = validate();
   const isOwn = !isDevMode && !!user && !!ad && (
     ad.creator.id === user.id ||
@@ -836,21 +761,6 @@ export default function AdDetailPage() {
                   <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
                     {ad.availableAmount.toFixed(4)}π remaining · Limit ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
                   </p>
-
-                  {/* Payment method picker */}
-                  {/* <div className="mb-5">
-                    <label
-                      className="block text-xs font-medium mb-2"
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      Payment Method
-                    </label>
-                    <PaymentMethodPicker
-                      methods={ad.paymentMethods}
-                      selected={selectedPm}
-                      onSelect={setSelectedPm}
-                    />
-                  </div> */}
 
                   {/* Buy-ad: show wallet balance (only after wallet has loaded) */}
                   {isBuyAd && (
