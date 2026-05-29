@@ -1,12 +1,9 @@
 // components/p2p/PaymentAccountPicker.tsx
 //
-// Reusable payment-account selector used in two modes:
-//   Single (default) — radio selection, returns a full PaymentMethodDetail object.
-//                      Used in AdDetailPage so a Pi seller can pick the bank account
-//                      they want to receive Naira payment on.
-//   Multi            — checkbox selection, returns a set of account _ids.
-//                      Used in PostAdPage so a sell-ad creator can attach multiple
-//                      accounts to an ad.
+// Reusable payment-account selector (single mode — radio selection).
+// Returns a full PaymentMethodDetail object via setSelectedPaymentAccount.
+// Used in AdDetailPage so a Pi seller can pick the bank account
+// they want to receive Naira payment on.
 
 import React, { SetStateAction, useCallback, useEffect, useState } from 'react';
 import { useAuth }  from '@/hooks/useAuth';
@@ -18,13 +15,11 @@ import {
   NewPaymentMethodDetail,
   PaymentMethodType,
   PAYMENT_METHOD_LABELS,
+  PaymentMethodEnum,
 } from '@/types';
+import { ALL_PAYMENT_TYPES } from '@/lib/constants';
 
-// ─── Module-level constants ───────────────────────────────────────────────────
-
-const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
-  'bank_transfer', 'opay', 'palmpay', 'kuda', 'moniepoint',
-];
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface NewAccountDraft {
   type:          PaymentMethodType;
@@ -35,33 +30,18 @@ interface NewAccountDraft {
 }
 
 const BLANK_ACCOUNT: NewAccountDraft = {
-  type: 'bank_transfer',
+  type: PaymentMethodEnum.bankTransfer,
   accountName: '', accountNumber: '', bankName: '', isDefault: false,
 };
 
-// ─── Props — discriminated union on `multi` ───────────────────────────────────
-
-interface SingleProps {
-  multi?:              false;
-  selectedAccount:     PaymentMethodDetail | null;
-  setSelectedAccount:  React.Dispatch<SetStateAction<PaymentMethodDetail | null>>;
-  label?:              string;
-  hint?:               string;
-  required?:           boolean;
+// FIX 1: Removed the `multi?: false` stub left over from a stripped-out feature.
+interface Props {
+  selectedPaymentAccount:    PaymentMethodDetail | null;
+  setSelectedPaymentAccount: React.Dispatch<SetStateAction<PaymentMethodDetail | null>>;
+  label?:    string;
+  hint?:     string;
+  required?: boolean;
 }
-
-interface MultiProps {
-  multi:        true;
-  selectedIds:  string[];
-  onToggle:     (id: string) => void;
-  /** Called after a new account is saved so parent can auto-select it */
-  onNewSaved?:  (account: PaymentMethodDetail) => void;
-  label?:       string;
-  hint?:        string;
-  required?:    boolean;
-}
-
-type Props = SingleProps | MultiProps;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -89,16 +69,13 @@ function SectionHeader({
   );
 }
 
-/** Single account row — renders as radio (single) or checkbox (multi) */
 function AccountRow({
   account,
   selected,
-  multi,
   onSelect,
 }: {
   account:  PaymentMethodDetail;
   selected: boolean;
-  multi:    boolean;
   onSelect: () => void;
 }) {
   return (
@@ -107,49 +84,20 @@ function AccountRow({
       onClick={onSelect}
       className="w-full text-left rounded-xl p-4 transition-all"
       style={{
-        background:  selected ? 'rgba(240,160,60,0.1)'             : 'var(--bg-elevated)',
-        border:      `1px solid ${selected ? 'rgba(240,160,60,0.4)' : 'var(--border)'}`,
+        background: selected ? 'rgba(240,160,60,0.1)'              : 'var(--bg-elevated)',
+        border:     `1px solid ${selected ? 'rgba(240,160,60,0.4)' : 'var(--border)'}`,
       }}
     >
       <div className="flex items-center gap-3">
-        {/* Indicator — circle for radio, square for checkbox */}
-        {multi ? (
-          <div
-            className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-            style={{
-              background: selected ? 'var(--pi-gold)' : 'transparent',
-              border:     `2px solid ${selected ? 'var(--pi-gold)' : 'var(--border)'}`,
-            }}
-          >
-            {selected && (
-              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                <path
-                  d="M1 4l3 3 5-6"
-                  stroke="#0a0a0b"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </div>
-        ) : (
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{
-              border: `2px solid ${selected ? 'var(--pi-gold)' : 'var(--border)'}`,
-            }}
-          >
-            {selected && (
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ background: 'var(--pi-gold)' }}
-              />
-            )}
-          </div>
-        )}
+        <div
+          className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{ border: `2px solid ${selected ? 'var(--pi-gold)' : 'var(--border)'}` }}
+        >
+          {selected && (
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--pi-gold)' }} />
+          )}
+        </div>
 
-        {/* Account details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
@@ -183,7 +131,6 @@ function AccountRow({
   );
 }
 
-/** Inline form for adding a new payment account */
 function NewAccountForm({
   account,
   saving,
@@ -206,22 +153,13 @@ function NewAccountForm({
         <p className="text-sm font-semibold" style={{ color: 'var(--pi-gold)' }}>
           New Payment Account
         </p>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs"
-          style={{ color: 'var(--text-muted)' }}
-        >
+        <button type="button" onClick={onCancel} className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Cancel
         </button>
       </div>
 
-      {/* Account type chips */}
       <div className="mb-3">
-        <label
-          className="block text-xs font-medium mb-1.5"
-          style={{ color: 'var(--text-secondary)' }}
-        >
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
           Account Type
         </label>
         <div className="flex flex-wrap gap-2">
@@ -243,13 +181,9 @@ function NewAccountForm({
         </div>
       </div>
 
-      {/* Fields */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         <div>
-          <label
-            className="block text-xs font-medium mb-1"
-            style={{ color: 'var(--text-secondary)' }}
-          >
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
             Account Name *
           </label>
           <input
@@ -260,10 +194,7 @@ function NewAccountForm({
           />
         </div>
         <div>
-          <label
-            className="block text-xs font-medium mb-1"
-            style={{ color: 'var(--text-secondary)' }}
-          >
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
             Account Number *
           </label>
           <input
@@ -274,10 +205,7 @@ function NewAccountForm({
           />
         </div>
         <div>
-          <label
-            className="block text-xs font-medium mb-1"
-            style={{ color: 'var(--text-secondary)' }}
-          >
+          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
             Bank Name{account.type === 'bank_transfer' ? ' *' : ' (optional)'}
           </label>
           <input
@@ -289,7 +217,6 @@ function NewAccountForm({
         </div>
       </div>
 
-      {/* Default toggle */}
       <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
         <div
           onClick={() => onChange({ isDefault: !account.isDefault })}
@@ -320,15 +247,13 @@ function NewAccountForm({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-const PaymentAccountPicker: React.FC<Props> = (props) => {
-  const {
-    label,
-    hint,
-    required,
-  } = props;
-
-  const isMulti = props.multi === true;
-
+const PaymentAccountPicker: React.FC<Props> = ({
+  label,
+  hint,
+  required,
+  selectedPaymentAccount,
+  setSelectedPaymentAccount,
+}) => {
   const { addPaymentMethod } = useAuth();
   const { showToast }        = useToast();
 
@@ -338,34 +263,39 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
   const [newAccount,     setNewAccount]     = useState<NewAccountDraft>(BLANK_ACCOUNT);
   const [saving,         setSaving]         = useState(false);
 
-  // ── Fetch saved accounts ─────────────────────────────────────────────────
+  // ── Fetch saved accounts ──────────────────────────────────────────────────
+  //
+  // FIX 2: The original dep array was [], causing selectedPaymentAccount to be
+  // permanently stale inside the callback (always null). The auto-select guard
+  // `if (!selectedPaymentAccount)` therefore always passed, resetting the
+  // user's pick on every re-fetch.
+  //
+  // Fix: use a functional updater in setSelectedPaymentAccount so the callback
+  // reads live state without needing selectedPaymentAccount as a dep. The
+  // setter itself is stable and safe to depend on.
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const r        = await paymentMethodsApi.getAll();
-      const list     = r.data.paymentMethods as PaymentMethodDetail[];
+      const r    = await paymentMethodsApi.getAll();
+      const list = (r.data.userAccountDetails ?? []) as PaymentMethodDetail[];
       setAccounts(list);
 
-      // Auto-select default (or first) for single mode only
-      if (!isMulti && list.length > 0) {
-        const singleProps = props as SingleProps;
-        // Only auto-select if nothing is already selected
-        if (!singleProps.selectedAccount) {
-          const def = list.find((a) => a.isDefault) ?? list[0];
-          singleProps.setSelectedAccount(def);
-        }
-      }
+      // Auto-select the default (or first) account, but only when the user
+      // has not already made a selection.
+      setSelectedPaymentAccount((current) => {
+        if (current || !list?.length) return current;
+        return list.find((a) => a.isDefault) ?? list[0];
+      });
     } catch (e) {
       logger.error('PaymentAccountPicker fetchAccounts error:', e);
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMulti]);
+  }, [setSelectedPaymentAccount]);
 
   useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
 
-  // ── Save new account ─────────────────────────────────────────────────────
+  // ── Save new account ──────────────────────────────────────────────────────
   const handleSaveNew = async () => {
     if (!newAccount.accountName.trim() || !newAccount.accountNumber.trim()) {
       showToast('Account name and number are required', true);
@@ -375,39 +305,79 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
       showToast('Bank name is required for bank transfers', true);
       return;
     }
+
+    // FIX 3: Hoisted above try/catch so the catch block can reference it when
+    // handling a 409 (payload declared inside try is out of scope in catch).
+    const payload: NewPaymentMethodDetail = {
+      type:          newAccount.type,
+      label:         PAYMENT_METHOD_LABELS[newAccount.type],
+      accountName:   newAccount.accountName.trim(),
+      accountNumber: newAccount.accountNumber.trim(),
+      bankName:      newAccount.bankName.trim() || undefined,
+      isDefault:     newAccount.isDefault,
+    };
+
     setSaving(true);
     try {
-      const payload: NewPaymentMethodDetail = {
-        type:          newAccount.type,
-        label:         PAYMENT_METHOD_LABELS[newAccount.type],
-        accountName:   newAccount.accountName.trim(),
-        accountNumber: newAccount.accountNumber.trim(),
-        bankName:      newAccount.bankName.trim() || undefined,
-        isDefault:     newAccount.isDefault,
-      };
       await addPaymentMethod(payload);
 
-      // Refresh the list
       const r       = await paymentMethodsApi.getAll();
-      const updated = r.data.paymentMethods as PaymentMethodDetail[];
-      setAccounts(updated);
-      const newest  = updated[updated.length - 1];
+      const updated = (r.data.userAccountDetails ?? []) as PaymentMethodDetail[];
 
-      if (newest) {
-        if (!isMulti) {
-          // Single mode: auto-select the new account
-          (props as SingleProps).setSelectedAccount(newest);
-        } else {
-          // Multi mode: notify parent to auto-toggle the new account
-          (props as MultiProps).onNewSaved?.(newest);
-        }
+      if (!updated.length) {
+        showToast('Failed to load accounts after saving', true);
+        return;
       }
+
+      setAccounts(updated);
+
+      // FIX 4: Don't rely on array position to identify the saved account —
+      // the server may sort or deduplicate the list. Match by submitted values,
+      // falling back to the default account if flagged, then last element.
+      const justSaved =
+        (payload.isDefault && updated.find((a) => a.isDefault)) ||
+        updated.find(
+          (a) =>
+            a.accountNumber === payload.accountNumber &&
+            a.accountName   === payload.accountName
+        ) ||
+        updated[updated.length - 1];
+
+      if (justSaved) setSelectedPaymentAccount(justSaved);
 
       setNewAccount(BLANK_ACCOUNT);
       setShowNewAccount(false);
       showToast('Account saved and selected');
-    } catch (e) {
-      showToast('Failed to save account', true);
+    } catch (e: unknown) {
+      // FIX 5: Inspect the error instead of always showing a generic toast.
+      // On 409 the account already exists on the server — re-fetch so it
+      // appears in the list, auto-select it, and close the form so the user
+      // can proceed without re-entering anything.
+      const status  = (e as { response?: { status?: number } })?.response?.status;
+      const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+
+      if (status === 409) {
+        setNewAccount(BLANK_ACCOUNT);
+        setShowNewAccount(false);
+        try {
+          const r       = await paymentMethodsApi.getAll();
+          const updated = (r.data.userAccountDetails ?? []) as PaymentMethodDetail[];
+          if (updated.length) {
+            setAccounts(updated);
+            const existing = updated.find(
+              (a) =>
+                a.accountNumber === payload.accountNumber &&
+                a.accountName   === payload.accountName
+            );
+            if (existing) setSelectedPaymentAccount(existing);
+          }
+        } catch {
+          // Non-fatal — the list may be stale but the user can select manually.
+        }
+        showToast(message ?? 'This account is already saved — selecting it for you', true);
+      } else {
+        showToast(message ?? 'Failed to save account', true);
+      }
       logger.error('PaymentAccountPicker handleSaveNew error:', e);
     } finally {
       setSaving(false);
@@ -419,41 +389,32 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
     setNewAccount(BLANK_ACCOUNT);
   };
 
-  // ── Helpers to check selection state ────────────────────────────────────
-  const isSelected = (account: PaymentMethodDetail): boolean => {
-    if (isMulti) {
-      return (props as MultiProps).selectedIds.includes(account._id);
-    }
-    return (props as SingleProps).selectedAccount?._id === account._id;
-  };
+  // ── Selection helpers ─────────────────────────────────────────────────────
+
+  // FIX 6: Use _id comparison instead of reference equality (===).
+  // After a re-fetch every object is a new allocation, so === always returns
+  // false even when the same account is logically selected.
+  const isSelected = (account: PaymentMethodDetail): boolean =>
+    !!selectedPaymentAccount && selectedPaymentAccount._id === account._id;
 
   const handleSelect = (account: PaymentMethodDetail) => {
-    if (isMulti) {
-      (props as MultiProps).onToggle(account._id);
-    } else {
-      (props as SingleProps).setSelectedAccount(account);
-    }
+    setSelectedPaymentAccount(account);
   };
 
-  // ── Defaults for label/hint based on mode ───────────────────────────────
-  const resolvedLabel = label ?? (isMulti ? 'Payment Accounts' : 'Receiving Payment Account');
-  const resolvedHint  = hint  ?? (isMulti
-    ? 'Buyers will pay to these accounts'
-    : 'Buyer will send Naira to this account');
+  const resolvedLabel = label ?? 'Receiving Payment Account';
+  const resolvedHint  = hint  ?? 'Buyer will send Naira to this account';
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div>
       <SectionHeader label={resolvedLabel} hint={resolvedHint} required={required} />
 
-      {/* Loading */}
       {loading && (
         <div className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
           Loading your accounts…
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && accounts.length === 0 && !showNewAccount && (
         <div
           className="rounded-xl p-5 text-center mb-3"
@@ -472,7 +433,6 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
         </div>
       )}
 
-      {/* Account list */}
       {!loading && accounts.length > 0 && (
         <div className="space-y-2 mb-3">
           {accounts.map((account) => (
@@ -480,12 +440,10 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
               key={account._id}
               account={account}
               selected={isSelected(account)}
-              multi={isMulti}
               onSelect={() => handleSelect(account)}
             />
           ))}
 
-          {/* Add new — shown when no inline form is open */}
           {!showNewAccount && (
             <button
               type="button"
@@ -511,7 +469,6 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
         </div>
       )}
 
-      {/* Inline new account form */}
       {showNewAccount && (
         <NewAccountForm
           account={newAccount}
@@ -521,16 +478,6 @@ const PaymentAccountPicker: React.FC<Props> = (props) => {
           onCancel={handleCancelNew}
         />
       )}
-
-      {/* Multi-mode validation hint */}
-      {isMulti &&
-        (props as MultiProps).selectedIds.length === 0 &&
-        !showNewAccount &&
-        accounts.length > 0 && (
-          <p className="text-xs mt-2" style={{ color: '#f87171' }}>
-            Select at least one account for buyers to pay to.
-          </p>
-        )}
     </div>
   );
 };

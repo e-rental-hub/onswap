@@ -10,6 +10,7 @@ import { useAuth }          from '@/hooks/useAuth';
 import {
   Ad, AdPaymentDetail, PaymentMethodDetail, PaymentMethodType,
   PAYMENT_METHOD_LABELS, WalletSummary, PiWalletAddress,
+  PaymentMethodEnum,
 } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -267,11 +268,11 @@ export default function AdDetailPage() {
   // ── sell-ad viewer (buyer): which payment method type they'll use ──────────
   // The buyer pays to the ad creator's pre-set accounts, so only a type chip
   // selection is needed — not their own account details.
-  const [selectedPm, setSelectedPm] = useState<PaymentMethodType | ''>('');
+  const [selectedPm, setSelectedPm] = useState<PaymentMethodType>(PaymentMethodEnum.bankTransfer);
 
   // ── buy-ad viewer (Pi seller): their own Naira receiving account ──────────
   // The ad creator (buyer) will send Naira here.
-  const [selectedPaymentAccount, setSelectedPaymentAccount] =
+  const [selectedSellerAccountDetail, setSelectedSellerAccountDetail] =
     useState<PaymentMethodDetail | null>(null);
 
   // ── Pi destination wallet (used by both flows) ────────────────────────────
@@ -279,15 +280,15 @@ export default function AdDetailPage() {
   // - buy-ad viewer:  Pi seller — Pi is released FROM escrow TO their wallet
   //   after the buyer's Naira is confirmed.
   // Shown in the summary step so configure stays uncluttered.
-  const [selectedPiWallet, setSelectedPiWallet] =
-    useState<PiWalletAddress | null>(null);
+  const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
 
   // ── Load ad ─────────────────────────────────────────────────────────────────
   const fetchAd = useCallback(async () => {
     try {
       const res = await adsApi.getAdById(id);
       setAd(res.data.ad);
-      if (res.data.ad.paymentMethods.length === 1) {
+      logger.info('Ad loaded:', res.data.ad);
+      if (res.data.ad.paymentMethods && res.data.ad.paymentMethods.length === 1) {
         setSelectedPm(res.data.ad.paymentMethods[0]);
       }
     } catch (e) {
@@ -336,16 +337,18 @@ export default function AdDetailPage() {
     if (ad.type === 'sell' && !selectedPm)
       return 'Choose a payment method';
     // buy-ad viewer (Pi seller): must pick a Naira receiving account
-    if (ad.type === 'buy' && !selectedPaymentAccount)
-      return 'Select a payment account to receive Naira';
+    if (ad.type === 'sell' && !selectedPiWalletId)
+      return 'Select a wallet to receive Pi';
+    if (ad.type === 'buy' && !selectedSellerAccountDetail)
+      return 'Select a payment account to receive Naira';      
     return '';
   }
 
   // Pi wallet required at order creation for both flows.
-  function validatePiWallet(): string {
-    if (!selectedPiWallet) return 'Select or add a Pi wallet address to receive Pi';
-    return '';
-  }
+  // function validatePiWallet(): string {
+  //   if (isSellAd && !selectedPiWalletId) return 'Select or add a Pi wallet address to receive Pi';
+  //   return '';
+  // }
 
   const validationError = validate();
 
@@ -381,8 +384,8 @@ export default function AdDetailPage() {
     const err = validate();
     if (err) { setError(err); return; }
 
-    const walletErr = validatePiWallet();
-    if (walletErr) { setError(walletErr); return; }
+    // const walletErr = validatePiWallet();
+    // if (walletErr) { setError(walletErr); return; }
 
     setCreating(true);
     setError('');
@@ -391,20 +394,11 @@ export default function AdDetailPage() {
         adId:          id,
         piAmount:      piRounded,
         // For buy-ads use the selected account's type; for sell-ads use the chosen chip.
-        paymentMethod: (isBuyAd ? selectedPaymentAccount!.type : selectedPm) as string,
-        // Pi is released to this wallet on trade completion.
-        buyerWalletAddress: selectedPiWallet!.address,
+        paymentMethod: selectedPm,
         // buy-ad only: the Pi seller's Naira receiving account details.
-        ...(isBuyAd && selectedPaymentAccount
-          ? {
-              sellerPaymentDetail: {
-                type:          selectedPaymentAccount.type,
-                accountName:   selectedPaymentAccount.accountName,
-                accountNumber: selectedPaymentAccount.accountNumber,
-                bankName:      selectedPaymentAccount.bankName,
-              },
-            }
-          : {}),
+        sellerAccountDetailId: isBuyAd ? selectedSellerAccountDetail?._id : undefined,
+        // Pi is released to this wallet on trade completion.
+        buyerWalletAddressId: isSellAd ? selectedPiWalletId as string : undefined,
       });
       setStep('done');
       logger.info(`Order created: ${res.data.order._id}`);
@@ -466,16 +460,16 @@ export default function AdDetailPage() {
 
   // sell-ad summary: the ad creator's payment detail that matches the viewer's choice
   const matchedDetail: AdPaymentDetail | undefined = isSellAd
-    ? ad.paymentDetails.find((d) => d.type === selectedPm)
-    : undefined;
+    ? ad.sellerAccountDetail
+    : selectedSellerAccountDetail as PaymentMethodDetail;
 
   // Deposit suggestion: shortfall grossed up for the 1 % fee
   const piShortfall      = Math.max(0, piRounded - (wallet?.piBalance ?? 0));
   const suggestedDeposit = Math.ceil((piShortfall / (1 - 0.01)) * 10000) / 10000;
 
   // Label shown in the summary table's "Payment" row
-  const summaryPaymentLabel = isBuyAd && selectedPaymentAccount
-    ? PAYMENT_METHOD_LABELS[selectedPaymentAccount.type]
+  const summaryPaymentLabel = isBuyAd && selectedSellerAccountDetail
+    ? PAYMENT_METHOD_LABELS[selectedSellerAccountDetail.type]
     : (PAYMENT_METHOD_LABELS[selectedPm as PaymentMethodType] ?? '—');
 
   return (
@@ -643,33 +637,30 @@ export default function AdDetailPage() {
             </div>
 
             {/* sell-ad: show seller's accounts upfront so buyer can verify */}
-            {isSellAd && ad.paymentDetails.length > 0 && (
+            {isSellAd && ad.sellerAccountDetail && (
               <div className="card p-6">
                 <p className="text-xs font-medium mb-4" style={{ color: 'var(--text-muted)' }}>
                   SELLER PAYMENT ACCOUNTS
                 </p>
                 <div className="space-y-3">
-                  {ad.paymentDetails.map((d, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl p-4"
-                      style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span
-                          className="text-xs px-2 py-0.5 rounded font-medium"
-                          style={{ background: 'rgba(240,160,60,0.12)', color: 'var(--pi-gold)' }}
-                        >
-                          {PAYMENT_METHOD_LABELS[d.type]}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        {d.accountName   && <p><span style={{ color: 'var(--text-muted)' }}>Name: </span><span style={{ color: 'var(--text-primary)' }}>{d.accountName}</span></p>}
-                        {d.accountNumber && <p><span style={{ color: 'var(--text-muted)' }}>Account: </span><span style={{ fontFamily: 'var(--font-mono)', color: 'var(--pi-gold)' }}>{d.accountNumber}</span></p>}
-                        {d.bankName      && <p><span style={{ color: 'var(--text-muted)' }}>Bank: </span><span style={{ color: 'var(--text-primary)' }}>{d.bankName}</span></p>}
-                      </div>
+                  <div
+                    className="rounded-xl p-4"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className="text-xs px-2 py-0.5 rounded font-medium"
+                        style={{ background: 'rgba(240,160,60,0.12)', color: 'var(--pi-gold)' }}
+                      >
+                        {PAYMENT_METHOD_LABELS[ad.sellerAccountDetail.type]}
+                      </span>
                     </div>
-                  ))}
+                    <div className="space-y-1 text-sm">
+                      {ad.sellerAccountDetail.accountName   && <p><span style={{ color: 'var(--text-muted)' }}>Name: </span><span style={{ color: 'var(--text-primary)' }}>{ad.sellerAccountDetail.accountName}</span></p>}
+                      {ad.sellerAccountDetail.accountNumber && <p><span style={{ color: 'var(--text-muted)' }}>Account: </span><span style={{ fontFamily: 'var(--font-mono)', color: 'var(--pi-gold)' }}>{ad.sellerAccountDetail.accountNumber}</span></p>}
+                      {ad.sellerAccountDetail.bankName      && <p><span style={{ color: 'var(--text-muted)' }}>Bank: </span><span style={{ color: 'var(--text-primary)' }}>{ad.sellerAccountDetail.bankName}</span></p>}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -843,14 +834,22 @@ export default function AdDetailPage() {
                   )}
 
                   {/* buy-ad: Pi seller picks their Naira receiving account */}
-                  {isBuyAd && (
+                  {isBuyAd ?
+                  (
                     <div className="mb-5">
                       <PaymentAccountPicker
-                        selectedAccount={selectedPaymentAccount}
-                        setSelectedAccount={setSelectedPaymentAccount}
+                        selectedPaymentAccount={selectedSellerAccountDetail}
+                        setSelectedPaymentAccount={setSelectedSellerAccountDetail}
                         label="Your Naira Receiving Account"
                         hint="Buyer sends Naira here"
                         required
+                      />
+                    </div>
+                  ) : (
+                    <div className="mb-5">
+                      <PiWalletPicker
+                        selectedPiWalletId={selectedPiWalletId}
+                        setSelectedPiWalletId={setSelectedPiWalletId}
                       />
                     </div>
                   )}
@@ -925,8 +924,8 @@ export default function AdDetailPage() {
                   )}
 
                   {/* buy-ad: confirm the Pi seller's Naira account */}
-                  {isBuyAd && selectedPaymentAccount && (
-                    <SellerAccountConfirmCard account={selectedPaymentAccount} />
+                  {isBuyAd && selectedSellerAccountDetail && (
+                    <SellerAccountConfirmCard account={selectedSellerAccountDetail} />
                   )}
 
                   {/* buy-ad: escrow lock warning */}
@@ -938,20 +937,10 @@ export default function AdDetailPage() {
                     />
                   )}
 
-                  {/* Pi wallet — both flows need this.
-                      sell-ad viewer: Pi buyer sets where Pi is released to them.
-                      buy-ad viewer:  Pi seller sets where their Pi goes after escrow. */}
-                  <div className="mb-5">
-                    <PiWalletPicker
-                      selectedPiWallet={selectedPiWallet}
-                      setSelectedPiWallet={setSelectedPiWallet}
-                    />
-                  </div>
-
                   {/* Confirm button */}
                   <button
                     onClick={handleCreateOrder}
-                    disabled={creating || !!validatePiWallet()}
+                    disabled={creating}
                     className={`${ctaColor} w-full py-3.5 rounded-xl font-bold text-base`}
                   >
                     {creating

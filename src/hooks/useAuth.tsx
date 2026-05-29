@@ -134,14 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const addPaymentMethod = useCallback(async (data: NewPaymentMethodDetail) => {
     const res = await paymentMethodsApi.add(data);
-    syncPaymentMethods(res.data.paymentMethods);
+    syncPaymentMethods(res.data.userAccountDetails);
     logger.info(`Payment method added: ${data.type}`);
   }, []);
 
   const updatePaymentMethod = useCallback(
     async (pmId: string, data: Partial<NewPaymentMethodDetail>) => {
       const res = await paymentMethodsApi.update(pmId, data);
-      syncPaymentMethods(res.data.paymentMethods);
+      syncPaymentMethods(res.data.userAccountDetails);
       logger.info(`Payment method updated: ${pmId}`);
     },
     []
@@ -149,13 +149,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const removePaymentMethod = useCallback(async (pmId: string) => {
     const res = await paymentMethodsApi.remove(pmId);
-    syncPaymentMethods(res.data.paymentMethods);
+    syncPaymentMethods(res.data.userAccountDetails);
     logger.info(`Payment method removed: ${pmId}`);
   }, []);
 
   const setDefaultPaymentMethod = useCallback(async (pmId: string) => {
     const res = await paymentMethodsApi.setDefault(pmId);
-    syncPaymentMethods(res.data.paymentMethods);
+    syncPaymentMethods(res.data.userAccountDetails);
     logger.info(`Default payment method set: ${pmId}`);
   }, []);
 

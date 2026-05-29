@@ -19,7 +19,16 @@ export interface PiPaymentData {
 // ─── Payment methods ──────────────────────────────────────────────────────────
 
 export type PaymentMethodType =
-  | 'bank_transfer' | 'opay' | 'palmpay' | 'kuda' | 'moniepoint';
+  | 'bank_transfer' ;
+
+  export enum PaymentMethodEnum {
+  bankTransfer = 'bank_transfer',
+  // opay         = 'opay',
+  // palmpay      = 'palmpay',
+  // kuda         = 'kuda',
+  // moniepoint   = 'moniepoint',
+  // cashDeposit  = 'cash_deposit',  // merged from removed PaymentAccMethodEnum
+}
 
 export interface PaymentMethodDetail {
   _id:           string;
@@ -100,7 +109,7 @@ export interface User {
   completionRate:  number;
   piBalance:       number;
   lockedBalance:   number;
-  paymentMethods:     PaymentMethodDetail[];
+  userAccountDetails:     PaymentMethodDetail[];
   piWalletAddresses:  PiWalletAddress[];
   createdAt:          string;
 }
@@ -129,7 +138,7 @@ export interface Ad {
   pricePerPi:      number;
   currency:        string;
   paymentMethods:  PaymentMethodType[];
-  paymentDetails:  AdPaymentDetail[];
+  sellerAccountDetail?:  AdPaymentDetail;
   paymentWindow:   number;
   terms?:          string;
   autoReply?:      string;
@@ -137,8 +146,20 @@ export interface Ad {
   completedOrders: number;
   reservedPi:      number;
   /** Snapshot of the creator's selected Pi wallet for buy ads (address + tag) */
-  piWalletAddress?: { address: string; tag: string };
+  buyerWalletAddress?: { address: string; tag: string };
   createdAt:       string;
+}
+
+export enum AdTypeEnum {
+  buy  = 'buy',
+  sell = 'sell',
+}
+
+export enum AdStatusEnum {
+  active    = 'active',
+  paused    = 'paused',
+  completed = 'completed',
+  cancelled = 'cancelled',
 }
 
 // ─── Orders ───────────────────────────────────────────────────────────────────
@@ -174,6 +195,8 @@ export interface Order {
   pricePerPi:     number;
   currency:       string;
   paymentMethod:  PaymentMethodType;
+  sellerAccountDetail: AdPaymentDetail;
+  buyerWalletAddress: string
   status:         OrderStatus;
   escrow:         Escrow;
   messages:       Message[];
@@ -189,10 +212,10 @@ export interface Order {
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethodType, string> = {
   bank_transfer: 'Bank Transfer',
-  opay:          'OPay',
-  palmpay:       'PalmPay',
-  kuda:          'Kuda Bank',
-  moniepoint:    'Moniepoint',
+  // opay:          'OPay',
+  // palmpay:       'PalmPay',
+  // kuda:          'Kuda Bank',
+  // moniepoint:    'Moniepoint',
 };
 
 export const TX_TYPE_LABELS: Record<TxType, string> = {
@@ -234,3 +257,30 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
   cancelled:       'text-gray-400 bg-gray-400/10',
   refunded:        'text-gray-400 bg-gray-400/10',
 };
+
+export enum MessageTypeEnum {
+  text         = 'text',
+  system       = 'system',
+  paymentProof = 'payment_proof',
+}
+
+export enum OrderStatusEnum {
+  paymentPending = 'payment_pending',  // buyer needs to send Naira
+  paymentSent    = 'payment_sent',     // buyer confirmed; seller to verify & release
+  completed      = 'completed',        // seller released Pi
+  disputed       = 'disputed',         // either party raised a dispute
+  cancelled      = 'cancelled',        // cancelled before payment sent
+  refunded       = 'refunded',         // Pi returned after dispute resolution
+}
+
+export enum EscrowStatusEnum {
+  pending  = 'pending',
+  locked   = 'locked',
+  released = 'released',
+  refunded = 'refunded',
+}
+
+export enum CurrencyEnum {
+  naira        = 'NGN',
+  kenyaShilling = 'KES',
+}

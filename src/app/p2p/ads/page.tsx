@@ -14,12 +14,9 @@ import {
 } from '@/types';
 import { logger }   from '@/lib/logger';
 import { useToast } from '@/hooks/useToast';
+import { ALL_PAYMENT_TYPES } from '@/lib/constants';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
-  'bank_transfer', 'opay', 'palmpay', 'kuda', 'moniepoint',
-];
 
 type View = 'list' | 'create' | 'edit';
 
@@ -275,12 +272,10 @@ export default function PostAdPage() {
 
   // ── Sell ad: single selected payment account (managed by PaymentAccountPicker)
   //    This is the source of truth — no redundant id stored in form state.
-  const [selectedPaymentAccount, setSelectedPaymentAccount] =
-    useState<PaymentMethodDetail | null>(null);
+  const [selectedSellerAccount, setSelectedSellerAccount] = useState<PaymentMethodDetail | null>(null);
 
   // ── Buy ad: Pi wallet where Pi is released on trade completion
-  const [selectedPiWallet, setSelectedPiWallet] =
-    useState<PiWalletAddress | null>(null);
+  const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -322,8 +317,8 @@ export default function PostAdPage() {
     setEditingAd(null);
     setForm(BLANK_FORM);
     setError('');
-    setSelectedPaymentAccount(null);
-    setSelectedPiWallet(null);
+    setSelectedSellerAccount(null);
+    setSelectedPiWalletId(null);
     setView('create');
   };
 
@@ -346,21 +341,21 @@ export default function PostAdPage() {
     });
 
     // Pre-select the payment account for sell ads
-    if (ad.type === 'sell' && ad.paymentDetails.length > 0) {
+    if (ad.type === 'sell' && ad.sellerAccountDetail) {
       try {
         const r       = await paymentMethodsApi.getAll();
-        const saved   = r.data.paymentMethods as PaymentMethodDetail[];
-        const detail  = ad.paymentDetails[0]; // single account
+        const saved   = r.data.userAccountDetails as PaymentMethodDetail[];
+        const detail  = ad.sellerAccountDetail; // single account
         const match   = saved.find(
           (pm) => pm.type === detail.type && pm.accountNumber === detail.accountNumber,
         ) ?? null;
-        setSelectedPaymentAccount(match);
+        setSelectedSellerAccount(match || saved[0]);
       } catch (e) {
         logger.error('openEdit fetchAccounts error:', e);
-        setSelectedPaymentAccount(null);
+        setSelectedSellerAccount(null);
       }
     } else {
-      setSelectedPaymentAccount(null);
+      setSelectedSellerAccount(null);
     }
 
     setView('edit');
@@ -376,9 +371,9 @@ export default function PostAdPage() {
   const editMaxPi  = editingAd?.piAmount ?? Infinity;
 
   // Sell ad is valid when a payment account is selected
-  const sellMethodsValid = form.type !== 'sell' || !!selectedPaymentAccount;
+  const sellMethodsValid = form.type !== 'sell' || !!selectedSellerAccount;
   const buyMethodsValid  = form.type !== 'buy'  || form.acceptedTypes.length > 0;
-  const buyWalletValid   = form.type !== 'buy'  || !!selectedPiWallet;
+  const buyWalletValid   = form.type !== 'buy'  || !!selectedPiWalletId;
 
   // ── Payload builder ────────────────────────────────────────────────────────
   // Sell ads: derive paymentDetails and paymentMethods directly from the
@@ -386,35 +381,18 @@ export default function PostAdPage() {
   function buildPayload() {
     const isSell = form.type === 'sell';
 
-    const paymentDetails = isSell && selectedPaymentAccount
-      ? [{
-          type:          selectedPaymentAccount.type,
-          label:         selectedPaymentAccount.label,
-          accountName:   selectedPaymentAccount.accountName,
-          accountNumber: selectedPaymentAccount.accountNumber,
-          bankName:      selectedPaymentAccount.bankName,
-        }]
-      : [];
-
-    const paymentMethods: PaymentMethodType[] = isSell && selectedPaymentAccount
-      ? [selectedPaymentAccount.type]
-      : form.acceptedTypes;
-
     return {
       type:          form.type,
       piAmount:      Number(form.piAmount),
       minLimit:      Number(form.minLimit),
       maxLimit:      Number(form.maxLimit),
       pricePerPi:    Number(form.pricePerPi),
-      paymentMethods,
-      paymentDetails,
+      paymentMethods: form.acceptedTypes,
       paymentWindow: Number(form.paymentWindow),
       terms:         form.terms,
       autoReply:     form.autoReply,
-      // Buy ads: store creator's Pi wallet so Pi can be released on completion
-      ...(form.type === 'buy' && selectedPiWallet
-        ? { piWalletAddress: { address: selectedPiWallet.address, tag: selectedPiWallet.tag } }
-        : {}),
+      buyerPiWalletId: form.type==='buy'? selectedPiWalletId as string : undefined,
+      sellerAccountDetailId: form.type==='sell'? selectedSellerAccount?._id as string : undefined,
     };
   }
 
@@ -479,7 +457,8 @@ export default function PostAdPage() {
         maxLimit:       payload.maxLimit,
         pricePerPi:     payload.pricePerPi,
         paymentMethods: payload.paymentMethods,
-        paymentDetails: payload.paymentDetails,
+        paymentDetails: payload.sellerAccountDetailId,
+        buyerPiWalletId: payload.buyerPiWalletId,
         paymentWindow:  payload.paymentWindow,
         terms:          payload.terms,
         autoReply:      payload.autoReply,
@@ -682,7 +661,7 @@ export default function PostAdPage() {
                           onClick={() => {
                             setForm((f) => ({ ...f, type: t }));
                             // Reset account selection when switching types
-                            setSelectedPaymentAccount(null);
+                            setSelectedSellerAccount(null);
                           }}
                           className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
                             form.type === t
@@ -829,8 +808,8 @@ export default function PostAdPage() {
                 ════════════════════════════════════════════════════════ */}
                 {form.type === 'sell' && (
                   <PaymentAccountPicker
-                    selectedAccount={selectedPaymentAccount}
-                    setSelectedAccount={setSelectedPaymentAccount}
+                    selectedPaymentAccount={selectedSellerAccount}
+                    setSelectedPaymentAccount={setSelectedSellerAccount}
                     label="Payment Account"
                     hint="Buyers will pay to this account"
                     required
@@ -840,57 +819,55 @@ export default function PostAdPage() {
                 {/* ════════════════════════════════════════════════════════
                     BUY AD — accepted payment types + Pi wallet
                 ════════════════════════════════════════════════════════ */}
-                {form.type === 'buy' && (
-                  <div className="space-y-5">
-                    {/* Accepted payment method types */}
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <label
-                          className="text-sm font-medium"
-                          style={{ color: 'var(--text-secondary)' }}
-                        >
-                          Accepted Payment Methods{' '}
-                          <span style={{ color: '#f87171' }}>*</span>
-                        </label>
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          How you want sellers to pay you
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {ALL_PAYMENT_TYPES.map((t) => {
-                          const active = form.acceptedTypes.includes(t);
-                          return (
-                            <button
-                              key={t}
-                              type="button"
-                              onClick={() => toggleAcceptedType(t)}
-                              className="px-4 py-2 rounded-lg border text-sm transition-all"
-                              style={{
-                                background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
-                                color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
-                                borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
-                              }}
-                            >
-                              {active && <span className="mr-1">✓</span>}
-                              {PAYMENT_METHOD_LABELS[t]}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {form.acceptedTypes.length === 0 && (
-                        <p className="text-xs mt-2" style={{ color: '#f87171' }}>
-                          Select at least one payment method.
-                        </p>
-                      )}
+                <div className="space-y-5">
+                  {/* Accepted payment method types */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <label
+                        className="text-sm font-medium"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        Accepted Payment Methods{' '}
+                        <span style={{ color: '#f87171' }}>*</span>
+                      </label>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        How you want sellers to pay you
+                      </span>
                     </div>
-
-                    {/* Pi wallet where Pi is released on trade completion */}
-                    <PiWalletPicker
-                      selectedPiWallet={selectedPiWallet}
-                      setSelectedPiWallet={setSelectedPiWallet}
-                    />
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_PAYMENT_TYPES.map((t) => {
+                        const active = form.acceptedTypes.includes(t);
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => toggleAcceptedType(t)}
+                            className="px-4 py-2 rounded-lg border text-sm transition-all"
+                            style={{
+                              background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
+                              color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
+                              borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
+                            }}
+                          >
+                            {active && <span className="mr-1">✓</span>}
+                            {PAYMENT_METHOD_LABELS[t]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {form.acceptedTypes.length === 0 && (
+                      <p className="text-xs mt-2" style={{ color: '#f87171' }}>
+                        Select at least one payment method.
+                      </p>
+                    )}
                   </div>
-                )}
+
+                  {/* Pi wallet where Pi is released on trade completion */}
+                  {form.type === "buy" && <PiWalletPicker
+                    selectedPiWalletId={selectedPiWalletId}
+                    setSelectedPiWalletId={setSelectedPiWalletId}
+                  />}
+                </div>
 
                 {/* ── Payment Window ─────────────────────────────────────── */}
                 <div className="grid grid-cols-2 gap-4">
