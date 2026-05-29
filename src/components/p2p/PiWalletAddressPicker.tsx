@@ -22,8 +22,8 @@ const BLANK_WALLET: NewWallet = { address: '', tag: '', isDefault: false };
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  setSelectedPiWallet: React.Dispatch<SetStateAction<PiWalletAddress | null>>;
-  selectedPiWallet:    PiWalletAddress | null;
+  setSelectedPiWalletId: React.Dispatch<SetStateAction<string | null>>;
+  selectedPiWalletId:    string | null;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ function WalletRow({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWallet, selectedPiWallet }) => {
+const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWalletId, selectedPiWalletId }) => {
   const { isAuthenticated, addPiWalletAddress } = useAuth();
   const { showToast } = useToast();
 
@@ -131,13 +131,13 @@ const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWallet, selectedPiWallet
       setSavedWallets(wallets);
       // Auto-select default, then first
       const def = wallets.find((w) => w.isDefault) ?? wallets[0];
-      if (def) setSelectedPiWallet(def);
+      if (def) setSelectedPiWalletId(def._id);
     } catch (e) {
       logger.error('fetchSavedWallets error:', e);
     } finally {
       setLoadingWallets(false);
     }
-  }, [isAuthenticated, setSelectedPiWallet]);
+  }, [isAuthenticated, setSelectedPiWalletId]);
 
   useEffect(() => { fetchSavedWallets(); }, [fetchSavedWallets]);
 
@@ -163,7 +163,7 @@ const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWallet, selectedPiWallet
       const updated = r.data.piWalletAddresses as PiWalletAddress[];
       setSavedWallets(updated);
       const newest  = updated[updated.length - 1];
-      if (newest) setSelectedPiWallet(newest);
+      if (newest) setSelectedPiWalletId(newest._id);
       setNewWallet(BLANK_WALLET);
       setShowNewWallet(false);
       showToast('Wallet address saved and selected');
@@ -222,8 +222,8 @@ const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWallet, selectedPiWallet
             <WalletRow
               key={w._id}
               wallet={w}
-              selected={selectedPiWallet?._id === w._id}
-              onSelect={() => setSelectedPiWallet(w)}
+              selected={selectedPiWalletId === w._id}
+              onSelect={() => setSelectedPiWalletId(w._id)}
             />
           ))}
 
