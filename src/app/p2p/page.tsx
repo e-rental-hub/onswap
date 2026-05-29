@@ -9,10 +9,10 @@ import { logger } from '@/lib/logger';
 const PAYMENT_OPTIONS: { value: PaymentMethodType | ''; label: string }[] = [
   { value: '', label: 'All Methods' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'opay', label: 'OPay' },
-  { value: 'palmpay', label: 'PalmPay' },
-  { value: 'kuda', label: 'Kuda Bank' },
-  { value: 'moniepoint', label: 'Moniepoint' },
+  // { value: 'opay', label: 'OPay' },
+  // { value: 'palmpay', label: 'PalmPay' },
+  // { value: 'kuda', label: 'Kuda Bank' },
+  // { value: 'moniepoint', label: 'Moniepoint' },
 ];
 
 export default function P2PMarketPage() {
