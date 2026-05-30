@@ -7,9 +7,9 @@ import {
   useCallback,
   ReactNode,
 } from 'react';
-import { authApi, paymentMethodsApi } from '@/lib/api';
+import { authApi, paymentMethodsApi, piWalletsApi } from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { User, PaymentMethodDetail, NewPaymentMethodDetail } from '@/types';
+import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress } from '@/types';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -36,12 +36,18 @@ interface AuthContextType {
   updatePaymentMethod: (pmId: string, data: Partial<NewPaymentMethodDetail>) => Promise<void>;
   removePaymentMethod: (pmId: string) => Promise<void>;
   setDefaultPaymentMethod: (pmId: string) => Promise<void>;
+  // Pi wallet addresses
+  addPiWalletAddress: (data: NewPiWalletAddress) => Promise<void>;
+  updatePiWalletAddress: (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) => Promise<void>;
+  removePiWalletAddress: (waId: string) => Promise<void>;
+  setDefaultPiWalletAddress: (waId: string) => Promise<void>;
 }
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
 const TOKEN_KEY = 'pi_p2p_token';
 const USER_KEY = 'pi_p2p_user';
+const isDevMode = process.env.NODE_ENV === "development"
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -53,8 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const isDevMode = process.env.NODE_ENV === "development";
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -130,14 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const addPaymentMethod = useCallback(async (data: NewPaymentMethodDetail) => {
     const res = await paymentMethodsApi.add(data);
-    syncPaymentMethods(res.data.paymentMethods);
+    syncPaymentMethods(res.data.userAccountDetails);
     logger.info(`Payment method added: ${data.type}`);
   }, []);
 
   const updatePaymentMethod = useCallback(
     async (pmId: string, data: Partial<NewPaymentMethodDetail>) => {
       const res = await paymentMethodsApi.update(pmId, data);
-      syncPaymentMethods(res.data.paymentMethods);
+      syncPaymentMethods(res.data.userAccountDetails);
       logger.info(`Payment method updated: ${pmId}`);
     },
     []
@@ -145,14 +149,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const removePaymentMethod = useCallback(async (pmId: string) => {
     const res = await paymentMethodsApi.remove(pmId);
-    syncPaymentMethods(res.data.paymentMethods);
+    syncPaymentMethods(res.data.userAccountDetails);
     logger.info(`Payment method removed: ${pmId}`);
   }, []);
 
   const setDefaultPaymentMethod = useCallback(async (pmId: string) => {
     const res = await paymentMethodsApi.setDefault(pmId);
-    syncPaymentMethods(res.data.paymentMethods);
+    syncPaymentMethods(res.data.userAccountDetails);
     logger.info(`Default payment method set: ${pmId}`);
+  }, []);
+
+  // ── Pi Wallet Address helpers ─────────────────────────────────────────────
+
+  const syncPiWalletAddresses = (addresses: PiWalletAddress[]) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, piWalletAddresses: addresses };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const addPiWalletAddress = useCallback(async (data: NewPiWalletAddress) => {
+    const res = await piWalletsApi.add(data);
+    syncPiWalletAddresses(res.data.piWalletAddresses);
+    logger.info(`Pi wallet address added: ${data.tag}`);
+  }, []);
+
+  const updatePiWalletAddress = useCallback(
+    async (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) => {
+      const res = await piWalletsApi.update(waId, data);
+      syncPiWalletAddresses(res.data.piWalletAddresses);
+      logger.info(`Pi wallet address updated: ${waId}`);
+    }, []
+  );
+
+  const removePiWalletAddress = useCallback(async (waId: string) => {
+    const res = await piWalletsApi.remove(waId);
+    syncPiWalletAddresses(res.data.piWalletAddresses);
+    logger.info(`Pi wallet address removed: ${waId}`);
+  }, []);
+
+  const setDefaultPiWalletAddress = useCallback(async (waId: string) => {
+    const res = await piWalletsApi.setDefault(waId);
+    syncPiWalletAddresses(res.data.piWalletAddresses);
+    logger.info(`Default Pi wallet address set: ${waId}`);
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -172,6 +213,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatePaymentMethod,
         removePaymentMethod,
         setDefaultPaymentMethod,
+        addPiWalletAddress,
+        updatePiWalletAddress,
+        removePiWalletAddress,
+        setDefaultPiWalletAddress,
       }}
     >
       {children}

@@ -1,136 +1,281 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter }              from 'next/navigation';
-import Navbar                     from '@/components/layout/Navbar';
-import { WalletCard }             from '@/components/p2p/WalletCard';
-import { DepositModal }           from '@/components/p2p/DepositModal';
+import { useRouter }        from 'next/navigation';
+import Navbar               from '@/components/layout/Navbar';
+import { WalletCard }       from '@/components/p2p/WalletCard';
+import { DepositModal }     from '@/components/p2p/DepositModal';
+import PiWalletPicker       from '@/components/p2p/PiWalletAddressPicker';
+import PaymentAccountPicker from '@/components/p2p/paymentAccountPicker';
 import { adsApi, walletApi, paymentMethodsApi } from '@/lib/api';
-import { useAuth }                from '@/hooks/useAuth';
+import { useAuth }          from '@/hooks/useAuth';
 import {
   Ad, AdType, AdStatus, PaymentMethodType, PaymentMethodDetail,
-  NewPaymentMethodDetail, PAYMENT_METHOD_LABELS, WalletSummary,
+  PAYMENT_METHOD_LABELS, WalletSummary, PiWalletAddress,
 } from '@/types';
-import { logger } from '@/lib/logger';
+import { logger }   from '@/lib/logger';
+import { useToast } from '@/hooks/useToast';
+import { ALL_PAYMENT_TYPES } from '@/lib/constants';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
-  'bank_transfer', 'opay', 'palmpay', 'kuda', 'moniepoint',
-];
 
 type View = 'list' | 'create' | 'edit';
 
 // ─── Form shape ───────────────────────────────────────────────────────────────
+// Sell ads: payment account is held in selectedPaymentAccount (separate state),
+// not inside the form, so the form only tracks non-account fields.
 
 interface AdFormState {
-  type:            AdType;
-  piAmount:        string;
-  minLimit:        string;
-  maxLimit:        string;
-  pricePerPi:      string;
-  // For sell ads — which saved account _ids are selected (drives paymentDetails)
-  selectedPmIds:   string[];
-  // For buy ads — which payment types the seller accepts from counterparty
-  acceptedTypes:   PaymentMethodType[];
-  paymentWindow:   string;
-  terms:           string;
-  autoReply:       string;
+  type:          AdType;
+  piAmount:      string;
+  minLimit:      string;
+  maxLimit:      string;
+  pricePerPi:    string;
+  /** Buy ads: payment types the counterparty may use to pay */
+  acceptedTypes: PaymentMethodType[];
+  paymentWindow: string;
+  terms:         string;
+  autoReply:     string;
 }
 
 const BLANK_FORM: AdFormState = {
   type: 'buy', piAmount: '', minLimit: '', maxLimit: '', pricePerPi: '',
-  selectedPmIds: [], acceptedTypes: [],
+  acceptedTypes: [],
   paymentWindow: '15', terms: '', autoReply: '',
 };
 
-// ─── New account inline form ──────────────────────────────────────────────────
+// ─── Reusable sub-components ──────────────────────────────────────────────────
 
-interface NewAccountDraft {
-  type:          PaymentMethodType;
-  label:         string;
-  accountName:   string;
-  accountNumber: string;
-  bankName:      string;
-  isDefault:     boolean;
+function ErrorBanner({ message }: { message: string }) {
+  if (!message) return null;
+  return (
+    <div
+      className="mb-4 px-4 py-3 rounded-lg text-sm"
+      style={{
+        background: 'rgba(239,68,68,0.1)',
+        color:      '#f87171',
+        border:     '1px solid rgba(239,68,68,0.2)',
+      }}
+    >
+      {message}
+    </div>
+  );
 }
 
-const BLANK_ACCOUNT: NewAccountDraft = {
-  type: 'bank_transfer', label: 'Bank Transfer',
-  accountName: '', accountNumber: '', bankName: '', isDefault: false,
-};
-
-// ─── Toast ────────────────────────────────────────────────────────────────────
-
-function useToast() {
-  const [toast,    setToast]    = useState('');
-  const [toastErr, setToastErr] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = useCallback((msg: string, isError = false) => {
-    if (timer.current) clearTimeout(timer.current);
-    setToast(msg);
-    setToastErr(isError);
-    timer.current = setTimeout(() => setToast(''), 3500);
-  }, []);
-
-  return { toast, toastErr, showToast };
+function EmptyState({
+  emoji, title, body, cta, onCta,
+}: {
+  emoji: string; title: string; body: string; cta: string; onCta: () => void;
+}) {
+  return (
+    <div className="card p-16 text-center">
+      <div className="text-4xl mb-4">{emoji}</div>
+      <p className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{title}</p>
+      <p className="text-sm mb-6"      style={{ color: 'var(--text-muted)' }}>{body}</p>
+      <button onClick={onCta} className="btn-pi px-6 py-2.5">{cta}</button>
+    </div>
+  );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Build the paymentDetails array the backend expects from selected saved accounts */
-function buildPaymentDetails(
-  selectedPmIds: string[],
-  savedMethods:  PaymentMethodDetail[],
-) {
-  return selectedPmIds
-    .map((id) => savedMethods.find((pm) => pm._id === id))
-    .filter(Boolean)
-    .map((pm) => ({
-      type:          pm!.type,
-      label:         pm!.label,
-      accountName:   pm!.accountName,
-      accountNumber: pm!.accountNumber,
-      bankName:      pm!.bankName,
-    }));
+function MenuItem({
+  children, color, hoverBg = 'var(--bg-elevated)', onClick, suffix,
+}: {
+  children: React.ReactNode; color: string; hoverBg?: string;
+  onClick: () => void; suffix?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
+      style={{ color }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+    >
+      {children}
+      {suffix && <span className="ml-auto text-xs opacity-60">{suffix}</span>}
+    </button>
+  );
 }
 
-/** Build the paymentMethods string array from selected saved accounts */
-function buildPaymentMethodTypes(
-  selectedPmIds: string[],
-  savedMethods:  PaymentMethodDetail[],
-): PaymentMethodType[] {
-  const types = selectedPmIds
-    .map((id) => savedMethods.find((pm) => pm._id === id)?.type)
-    .filter(Boolean) as PaymentMethodType[];
-  return [...new Set(types)]; // deduplicate same-type multiple accounts
+function AdCard({
+  ad, isMenuOpen, onToggleMenu, menuRef,
+  onEdit, onActivate, onPause, onCancel, onHardDelete,
+}: {
+  ad: Ad; isMenuOpen: boolean; onToggleMenu: () => void;
+  menuRef: React.RefObject<HTMLDivElement>;
+  onEdit: () => void; onActivate: () => void; onPause: () => void;
+  onCancel: () => void; onHardDelete: () => void;
+}) {
+  const tradedPi = ad.piAmount - ad.availableAmount;
+  return (
+    <div className="card p-5">
+      <div className="flex items-start gap-4">
+        <span
+          className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 mt-0.5 ${
+            ad.type === 'buy' ? 'badge-buy' : 'badge-sell'
+          }`}
+        >
+          {ad.type.toUpperCase()}
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2">
+            <span className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
+              ₦{ad.pricePerPi.toLocaleString()} / π
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Limit: ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
+            </span>
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-3 mt-1 text-sm"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <span>
+              <span style={{ color: 'var(--pi-gold)' }}>π{ad.availableAmount}</span>{' '}
+              available
+              {tradedPi > 0 && <span className="ml-1">(π{tradedPi} traded)</span>}
+            </span>
+            {ad.type === 'sell' && ad.reservedPi > 0 && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(250,204,21,0.1)',
+                  color:      '#facc15',
+                  border:     '1px solid rgba(250,204,21,0.2)',
+                }}
+              >
+                🔒 π{ad.reservedPi} locked
+              </span>
+            )}
+            <span>{ad.completedOrders} completed</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {ad.paymentMethods.map((pm) => (
+              <span
+                key={pm}
+                className="text-xs px-2 py-0.5 rounded"
+                style={{
+                  background: 'rgba(240,160,60,0.07)',
+                  color:      'var(--text-muted)',
+                  border:     '1px solid rgba(240,160,60,0.12)',
+                }}
+              >
+                {PAYMENT_METHOD_LABELS[pm]}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          <span
+            className={`text-xs px-2 py-1 rounded-full font-medium ${
+              ad.status === 'active'  ? 'text-green-400 bg-green-400/10'   :
+              ad.status === 'paused' ? 'text-yellow-400 bg-yellow-400/10' :
+                                        'text-gray-400 bg-gray-400/10'
+            }`}
+          >
+            {ad.status}
+          </span>
+
+          <div className="relative" ref={isMenuOpen ? menuRef : null}>
+            <button
+              onClick={onToggleMenu}
+              className="text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5"
+              style={{
+                borderColor: 'var(--border)',
+                color:       'var(--text-secondary)',
+                background:  'var(--bg-elevated)',
+              }}
+            >
+              Actions
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+                <path
+                  d="M2 3.5l3 3 3-3"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </svg>
+            </button>
+
+            {isMenuOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 z-20 rounded-xl overflow-hidden"
+                style={{
+                  minWidth:   '160px',
+                  background: 'var(--bg-card)',
+                  border:     '1px solid var(--border)',
+                  boxShadow:  '0 8px 32px rgba(0,0,0,0.4)',
+                }}
+              >
+                {ad.status !== 'cancelled' && ad.status !== 'completed' && (
+                  <MenuItem color="var(--pi-gold)" onClick={onEdit}>✏️ Edit Ad</MenuItem>
+                )}
+                {ad.status === 'paused' && (
+                  <MenuItem color="#4ade80" onClick={onActivate}>▶ Activate</MenuItem>
+                )}
+                {ad.status === 'active' && (
+                  <MenuItem color="#facc15" onClick={onPause}>⏸ Pause</MenuItem>
+                )}
+                {(ad.status === 'active' || ad.status === 'paused') && (
+                  <>
+                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '2px 0' }} />
+                    <MenuItem
+                      color="#f87171"
+                      hoverBg="rgba(239,68,68,0.08)"
+                      onClick={onCancel}
+                      suffix="refunds Pi"
+                    >
+                      ✕ Cancel Ad
+                    </MenuItem>
+                  </>
+                )}
+                {ad.status === 'cancelled' && (
+                  <>
+                    <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '2px 0' }} />
+                    <MenuItem
+                      color="#f87171"
+                      hoverBg="rgba(239,68,68,0.08)"
+                      onClick={onHardDelete}
+                    >
+                      🗑 Delete Permanently
+                    </MenuItem>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PostAdPage() {
-  const { isAuthenticated, user, addPaymentMethod } = useAuth();
-  const router  = useRouter();
+  const { isAuthenticated, user } = useAuth();
+  const router = useRouter();
   const { toast, toastErr, showToast } = useToast();
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [myAds,        setMyAds]        = useState<Ad[]>([]);
-  const [view,         setView]         = useState<View>('list');
-  const [saving,       setSaving]       = useState(false);
-  const [error,        setError]        = useState('');
-  const [wallet,       setWallet]       = useState<WalletSummary | null>(null);
-  const [showDeposit,  setShowDeposit]  = useState(false);
-  const [shortfall,    setShortfall]    = useState(0);
-  const [editingAd,    setEditingAd]    = useState<Ad | null>(null);
-  const [form,         setForm]         = useState<AdFormState>(BLANK_FORM);
+  // ── Core state ─────────────────────────────────────────────────────────────
+  const [myAds,       setMyAds]       = useState<Ad[]>([]);
+  const [view,        setView]        = useState<View>('list');
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState('');
+  const [wallet,      setWallet]      = useState<WalletSummary | null>(null);
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [shortfall,   setShortfall]   = useState(0);
+  const [editingAd,   setEditingAd]   = useState<Ad | null>(null);
+  const [form,        setForm]        = useState<AdFormState>(BLANK_FORM);
 
-  // Saved payment accounts from profile
-  const [savedMethods,    setSavedMethods]    = useState<PaymentMethodDetail[]>([]);
-  const [loadingSaved,    setLoadingSaved]    = useState(false);
-  // Inline "add new account" panel
-  const [showNewAccount,  setShowNewAccount]  = useState(false);
-  const [newAccount,      setNewAccount]      = useState<NewAccountDraft>(BLANK_ACCOUNT);
-  const [savingAccount,   setSavingAccount]   = useState(false);
+  // ── Sell ad: single selected payment account (managed by PaymentAccountPicker)
+  //    This is the source of truth — no redundant id stored in form state.
+  const [selectedSellerAccount, setSelectedSellerAccount] = useState<PaymentMethodDetail | null>(null);
+
+  // ── Buy ad: Pi wallet where Pi is released on trade completion
+  const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
 
   // ── Auth guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -152,35 +297,12 @@ export default function PostAdPage() {
     } catch (e) { logger.error('loadWallet error:', e); }
   }, []);
 
-  const loadSavedMethods = useCallback(async () => {
-    setLoadingSaved(true);
-    try {
-      const r = await paymentMethodsApi.getAll();
-      setSavedMethods(r.data.paymentMethods);
-    } catch (e) {
-      logger.error('loadSavedMethods error:', e);
-    } finally {
-      setLoadingSaved(false);
-    }
-  }, []);
-
   useEffect(() => {
     loadMyAds();
     loadWallet();
-    loadSavedMethods();
-  }, [loadMyAds, loadWallet, loadSavedMethods]);
+  }, [loadMyAds, loadWallet]);
 
-  // ── Sell ad — toggle saved account selection ───────────────────────────────
-  const toggleSavedAccount = (pmId: string) => {
-    setForm((f) => ({
-      ...f,
-      selectedPmIds: f.selectedPmIds.includes(pmId)
-        ? f.selectedPmIds.filter((id) => id !== pmId)
-        : [...f.selectedPmIds, pmId],
-    }));
-  };
-
-  // ── Buy ad — toggle accepted payment type ──────────────────────────────────
+  // ── Buy-ad: toggle accepted payment type ───────────────────────────────────
   const toggleAcceptedType = (type: PaymentMethodType) => {
     setForm((f) => ({
       ...f,
@@ -190,107 +312,74 @@ export default function PostAdPage() {
     }));
   };
 
-  // ── Add new account inline ─────────────────────────────────────────────────
-  const handleAddNewAccount = async () => {
-    if (!newAccount.accountName.trim() || !newAccount.accountNumber.trim()) {
-      showToast('Account name and number are required', true);
-      return;
-    }
-    setSavingAccount(true);
-    try {
-      const payload: NewPaymentMethodDetail = {
-        type:          newAccount.type,
-        label:         PAYMENT_METHOD_LABELS[newAccount.type],
-        accountName:   newAccount.accountName.trim(),
-        accountNumber: newAccount.accountNumber.trim(),
-        bankName:      newAccount.bankName.trim() || undefined,
-        isDefault:     newAccount.isDefault,
-      };
-
-      // Save to user profile via authController
-      await addPaymentMethod(payload);
-      // Reload the saved list so the new account appears immediately
-      const r = await paymentMethodsApi.getAll();
-      const updated = r.data.paymentMethods;
-      setSavedMethods(updated);
-
-      // Auto-select the newly added account
-      const newest = updated[updated.length - 1];
-      if (newest) {
-        setForm((f) => ({
-          ...f,
-          selectedPmIds: [...f.selectedPmIds, newest._id],
-        }));
-      }
-
-      setNewAccount(BLANK_ACCOUNT);
-      setShowNewAccount(false);
-      showToast('Account saved and selected');
-    } catch (e) {
-      showToast('Failed to save account', true);
-      logger.error('addPaymentMethod error:', e);
-    } finally {
-      setSavingAccount(false);
-    }
-  };
-
-  // ── Open create / edit ─────────────────────────────────────────────────────
+  // ── Open create ────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditingAd(null);
     setForm(BLANK_FORM);
     setError('');
-    setShowNewAccount(false);
+    setSelectedSellerAccount(null);
+    setSelectedPiWalletId(null);
     setView('create');
   };
 
-  const openEdit = (ad: Ad) => {
+  // ── Open edit ──────────────────────────────────────────────────────────────
+  // For sell ads: fetch saved accounts and pre-select the one matching the ad's
+  // paymentDetail so PaymentAccountPicker reflects the current configuration.
+  const openEdit = async (ad: Ad) => {
     setEditingAd(ad);
-
-    // Reconstruct selectedPmIds from the ad's paymentDetails, matching saved accounts
-    const selectedIds: string[] = [];
-    for (const detail of ad.paymentDetails) {
-      const match = savedMethods.find(
-        (pm) => pm.type === detail.type && pm.accountNumber === detail.accountNumber
-      );
-      if (match) selectedIds.push(match._id);
-    }
-
+    setError('');
     setForm({
       type:          ad.type,
       piAmount:      String(ad.piAmount),
       minLimit:      String(ad.minLimit),
       maxLimit:      String(ad.maxLimit),
       pricePerPi:    String(ad.pricePerPi),
-      selectedPmIds: selectedIds,
       acceptedTypes: ad.type === 'buy' ? [...ad.paymentMethods] : [],
       paymentWindow: String(ad.paymentWindow),
       terms:         ad.terms     ?? '',
       autoReply:     ad.autoReply ?? '',
     });
-    setError('');
-    setShowNewAccount(false);
+
+    // Pre-select the payment account for sell ads
+    if (ad.type === 'sell' && ad.sellerAccountDetail) {
+      try {
+        const r       = await paymentMethodsApi.getAll();
+        const saved   = r.data.userAccountDetails as PaymentMethodDetail[];
+        const detail  = ad.sellerAccountDetail; // single account
+        const match   = saved.find(
+          (pm) => pm.type === detail.type && pm.accountNumber === detail.accountNumber,
+        ) ?? null;
+        setSelectedSellerAccount(match || saved[0]);
+      } catch (e) {
+        logger.error('openEdit fetchAccounts error:', e);
+        setSelectedSellerAccount(null);
+      }
+    } else {
+      setSelectedSellerAccount(null);
+    }
+
     setView('edit');
   };
 
   // ── Derived / validation ────────────────────────────────────────────────────
   const sellAdPi      = form.type === 'sell' ? Number(form.piAmount) || 0 : 0;
   const hasSufficient = !wallet || form.type !== 'sell' || wallet.piBalance >= sellAdPi;
-  const balanceShort  = form.type === 'sell' && wallet ? Math.max(0, sellAdPi - wallet.piBalance) : 0;
-  const isEditSell    = view === 'edit' && editingAd?.type === 'sell';
-  const editMaxPi     = editingAd?.piAmount ?? Infinity;
+  const balanceShort  = form.type === 'sell' && wallet
+    ? Math.max(0, sellAdPi - wallet.piBalance)
+    : 0;
+  const isEditSell = view === 'edit' && editingAd?.type === 'sell';
+  const editMaxPi  = editingAd?.piAmount ?? Infinity;
 
-  const sellMethodsValid = form.type !== 'sell' || form.selectedPmIds.length > 0;
+  // Sell ad is valid when a payment account is selected
+  const sellMethodsValid = form.type !== 'sell' || !!selectedSellerAccount;
   const buyMethodsValid  = form.type !== 'buy'  || form.acceptedTypes.length > 0;
+  const buyWalletValid   = form.type !== 'buy'  || !!selectedPiWalletId;
 
-  // ── Submit helpers ─────────────────────────────────────────────────────────
+  // ── Payload builder ────────────────────────────────────────────────────────
+  // Sell ads: derive paymentDetails and paymentMethods directly from the
+  // selected account object — no intermediate id/cache lookup needed.
   function buildPayload() {
     const isSell = form.type === 'sell';
-    const paymentDetails = isSell
-      ? buildPaymentDetails(form.selectedPmIds, savedMethods)
-      : [];
-    const paymentMethods = isSell
-      ? buildPaymentMethodTypes(form.selectedPmIds, savedMethods)
-      : form.acceptedTypes;
 
     return {
       type:          form.type,
@@ -298,11 +387,12 @@ export default function PostAdPage() {
       minLimit:      Number(form.minLimit),
       maxLimit:      Number(form.maxLimit),
       pricePerPi:    Number(form.pricePerPi),
-      paymentMethods,
-      paymentDetails,
+      paymentMethods: form.acceptedTypes,
       paymentWindow: Number(form.paymentWindow),
       terms:         form.terms,
       autoReply:     form.autoReply,
+      buyerPiWalletId: form.type==='buy'? selectedPiWalletId as string : undefined,
+      sellerAccountDetailId: form.type==='sell'? selectedSellerAccount?._id as string : undefined,
     };
   }
 
@@ -311,8 +401,9 @@ export default function PostAdPage() {
     e.preventDefault();
     setError('');
 
-    if (!sellMethodsValid) { setError('Select at least one payment account'); return; }
+    if (!sellMethodsValid) { setError('Select a payment account for buyers to pay to'); return; }
     if (!buyMethodsValid)  { setError('Select at least one accepted payment method'); return; }
+    if (!buyWalletValid)   { setError('Select a Pi wallet address to receive Pi'); return; }
 
     if (form.type === 'sell' && wallet && wallet.piBalance < sellAdPi) {
       setShortfall(sellAdPi - wallet.piBalance);
@@ -327,7 +418,9 @@ export default function PostAdPage() {
       await Promise.all([loadMyAds(), loadWallet()]);
       setView('list');
     } catch (err: unknown) {
-      const data = (err as { response?: { data?: { message?: string; needsDeposit?: boolean; shortfall?: number } } })?.response?.data;
+      const data = (err as {
+        response?: { data?: { message?: string; needsDeposit?: boolean; shortfall?: number } };
+      })?.response?.data;
       if (data?.needsDeposit) {
         setShortfall(data.shortfall ?? 0);
         setShowDeposit(true);
@@ -346,7 +439,7 @@ export default function PostAdPage() {
     if (!editingAd) return;
     setError('');
 
-    if (!sellMethodsValid) { setError('Select at least one payment account'); return; }
+    if (!sellMethodsValid) { setError('Select a payment account for buyers to pay to'); return; }
     if (!buyMethodsValid)  { setError('Select at least one accepted payment method'); return; }
 
     const tradedAmount = editingAd.piAmount - editingAd.availableAmount;
@@ -358,14 +451,14 @@ export default function PostAdPage() {
     setSaving(true);
     try {
       const payload = buildPayload();
-      // type and creation-time fields are immutable on edit
       await adsApi.updateAd(editingAd._id, {
         piAmount:       payload.piAmount,
         minLimit:       payload.minLimit,
         maxLimit:       payload.maxLimit,
         pricePerPi:     payload.pricePerPi,
         paymentMethods: payload.paymentMethods,
-        paymentDetails: payload.paymentDetails,
+        paymentDetails: payload.sellerAccountDetailId,
+        buyerPiWalletId: payload.buyerPiWalletId,
         paymentWindow:  payload.paymentWindow,
         terms:          payload.terms,
         autoReply:      payload.autoReply,
@@ -374,19 +467,22 @@ export default function PostAdPage() {
       await Promise.all([loadMyAds(), loadWallet()]);
       setView('list');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to update ad';
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to update ad';
       setError(msg);
       showToast(msg, true);
       logger.error('updateAd error:', err);
     } finally { setSaving(false); }
   };
 
-  // ── Ad actions ────────────────────────────────────────────────────────────
-
+  // ── Ad status actions ──────────────────────────────────────────────────────
   const setAdStatus = async (ad: Ad, newStatus: AdStatus) => {
     try {
       await adsApi.updateAd(ad._id, { status: newStatus });
-      setMyAds((prev) => prev.map((a) => a._id === ad._id ? { ...a, status: newStatus } : a));
+      setMyAds((prev) =>
+        prev.map((a) => a._id === ad._id ? { ...a, status: newStatus } : a),
+      );
       showToast(`Ad ${newStatus === 'active' ? 'activated' : 'paused'}`);
     } catch (e) {
       showToast('Failed to update ad status', true);
@@ -394,7 +490,6 @@ export default function PostAdPage() {
     }
   };
 
-  /** Soft-cancel: sets status=cancelled, refunds reserved Pi to wallet */
   const cancelAd = async (adId: string) => {
     if (!confirm('Cancel this ad? Any reserved Pi will be returned to your wallet.')) return;
     try {
@@ -407,7 +502,6 @@ export default function PostAdPage() {
     }
   };
 
-  /** Hard-delete: permanently removes a cancelled ad from the database */
   const hardDeleteAd = async (adId: string) => {
     if (!confirm('Permanently delete this ad? This cannot be undone.')) return;
     try {
@@ -415,17 +509,18 @@ export default function PostAdPage() {
       showToast('Ad permanently deleted');
       setMyAds((prev) => prev.filter((a) => a._id !== adId));
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to delete ad';
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to delete ad';
       showToast(msg, true);
       logger.error('hardDeleteAd error:', e);
     }
   };
 
-  // Active action-menu tracking (which ad's menu is open)
+  // ── Action-menu tracking ───────────────────────────────────────────────────
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -437,7 +532,7 @@ export default function PostAdPage() {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
@@ -446,19 +541,21 @@ export default function PostAdPage() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-sm font-medium animate-slide-up"
+        <div
+          className="fixed top-4 right-4 z-50 px-4 py-3 rounded-xl text-sm font-medium animate-slide-up"
           style={{
             background: toastErr ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
             border:     `1px solid ${toastErr ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
             color:      toastErr ? '#f87171' : '#4ade80',
-          }}>
+          }}
+        >
           {toast}
         </div>
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-8">
 
-        {/* ── Page header ────────────────────────────────────────────────── */}
+        {/* ── Page header ─────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
@@ -478,7 +575,11 @@ export default function PostAdPage() {
         <WalletCard
           summary={wallet}
           accessToken={user?.piUid ?? null}
-          onDeposited={(bal) => setWallet((w) => w ? { ...w, piBalance: bal, totalHeld: bal + (w.lockedBalance ?? 0) } : w)}
+          onDeposited={(bal) =>
+            setWallet((w) =>
+              w ? { ...w, piBalance: bal, totalHeld: bal + (w.lockedBalance ?? 0) } : w,
+            )
+          }
           showToast={showToast}
         />
 
@@ -489,154 +590,32 @@ export default function PostAdPage() {
           ════════════════════════════════════════════════════════════════ */}
           {view === 'list' && (
             <div className="space-y-3 animate-fade-in">
-              {myAds.length === 0 && (
-                <div className="card p-16 text-center">
-                  <div className="text-4xl mb-4">📝</div>
-                  <p className="font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>No ads yet</p>
-                  <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-                    Post a buy or sell ad to start trading Pi.
-                  </p>
-                  <button onClick={openCreate} className="btn-pi px-6 py-2.5">Post Your First Ad</button>
-                </div>
+              {myAds.length === 0 ? (
+                <EmptyState
+                  emoji="📝"
+                  title="No ads yet"
+                  body="Post a buy or sell ad to start trading Pi."
+                  cta="Post Your First Ad"
+                  onCta={openCreate}
+                />
+              ) : (
+                myAds.map((ad) => (
+                  <AdCard
+                    key={ad._id}
+                    ad={ad}
+                    isMenuOpen={openMenuId === ad._id}
+                    onToggleMenu={() =>
+                      setOpenMenuId(openMenuId === ad._id ? null : ad._id)
+                    }
+                    menuRef={menuRef}
+                    onEdit={() => { openEdit(ad); setOpenMenuId(null); }}
+                    onActivate={() => { setAdStatus(ad, 'active'); setOpenMenuId(null); }}
+                    onPause={() => { setAdStatus(ad, 'paused'); setOpenMenuId(null); }}
+                    onCancel={() => { cancelAd(ad._id); setOpenMenuId(null); }}
+                    onHardDelete={() => { hardDeleteAd(ad._id); setOpenMenuId(null); }}
+                  />
+                ))
               )}
-
-              {myAds.map((ad) => {
-                const tradedPi = ad.piAmount - ad.availableAmount;
-                return (
-                  <div key={ad._id} className="card p-5">
-                    <div className="flex items-start gap-4">
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 mt-0.5 ${ad.type === 'buy' ? 'badge-buy' : 'badge-sell'}`}>
-                        {ad.type.toUpperCase()}
-                      </span>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
-                            ₦{ad.pricePerPi.toLocaleString()} / π
-                          </span>
-                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            Limit: ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-                          <span>
-                            <span style={{ color: 'var(--pi-gold)' }}>π{ad.availableAmount}</span> available
-                            {tradedPi > 0 && <span className="ml-1">(π{tradedPi} traded)</span>}
-                          </span>
-                          {ad.type === 'sell' && ad.reservedPi > 0 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full"
-                              style={{ background: 'rgba(250,204,21,0.1)', color: '#facc15', border: '1px solid rgba(250,204,21,0.2)' }}>
-                              🔒 π{ad.reservedPi} locked
-                            </span>
-                          )}
-                          <span>{ad.completedOrders} completed</span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {ad.paymentMethods.map((pm) => (
-                            <span key={pm} className="text-xs px-2 py-0.5 rounded"
-                              style={{ background: 'rgba(240,160,60,0.07)', color: 'var(--text-muted)', border: '1px solid rgba(240,160,60,0.12)' }}>
-                              {PAYMENT_METHOD_LABELS[pm]}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                          ad.status === 'active'   ? 'text-green-400 bg-green-400/10'  :
-                          ad.status === 'paused'   ? 'text-yellow-400 bg-yellow-400/10' :
-                                                     'text-gray-400 bg-gray-400/10'
-                        }`}>
-                          {ad.status}
-                        </span>
-
-                        {/* ── Action menu ── */}
-                        <div className="relative" ref={openMenuId === ad._id ? menuRef : null}>
-                          <button
-                            onClick={() => setOpenMenuId(openMenuId === ad._id ? null : ad._id)}
-                            className="text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5"
-                            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--bg-elevated)' }}>
-                            Actions
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-                              <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-                            </svg>
-                          </button>
-
-                          {openMenuId === ad._id && (
-                            <div className="absolute right-0 top-full mt-1 z-20 rounded-xl overflow-hidden"
-                              style={{ minWidth: '160px', background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
-
-                              {/* Edit — any non-terminal status */}
-                              {ad.status !== 'cancelled' && ad.status !== 'completed' && (
-                                <button onClick={() => { openEdit(ad); setOpenMenuId(null); }}
-                                  className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
-                                  style={{ color: 'var(--pi-gold)' }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                                  ✏️ Edit Ad
-                                </button>
-                              )}
-
-                              {/* Activate — only when paused */}
-                              {ad.status === 'paused' && (
-                                <button onClick={() => { setAdStatus(ad, 'active'); setOpenMenuId(null); }}
-                                  className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
-                                  style={{ color: '#4ade80' }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                                  ▶ Activate
-                                </button>
-                              )}
-
-                              {/* Pause — only when active */}
-                              {ad.status === 'active' && (
-                                <button onClick={() => { setAdStatus(ad, 'paused'); setOpenMenuId(null); }}
-                                  className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
-                                  style={{ color: '#facc15' }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                                  ⏸ Pause
-                                </button>
-                              )}
-
-                              {/* Cancel (soft) — active or paused only */}
-                              {(ad.status === 'active' || ad.status === 'paused') && (
-                                <>
-                                  <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '2px 0' }} />
-                                  <button onClick={() => { cancelAd(ad._id); setOpenMenuId(null); }}
-                                    className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
-                                    style={{ color: '#f87171' }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
-                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                                    ✕ Cancel Ad
-                                    <span className="ml-auto text-xs opacity-60">refunds Pi</span>
-                                  </button>
-                                </>
-                              )}
-
-                              {/* Hard delete — cancelled ads only */}
-                              {ad.status === 'cancelled' && (
-                                <>
-                                  <div style={{ height: '1px', background: 'var(--border-subtle)', margin: '2px 0' }} />
-                                  <button onClick={() => { hardDeleteAd(ad._id); setOpenMenuId(null); }}
-                                    className="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2"
-                                    style={{ color: '#f87171' }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239,68,68,0.08)')}
-                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
-                                    🗑 Delete Permanently
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           )}
 
@@ -652,35 +631,44 @@ export default function PostAdPage() {
               {view === 'edit' && editingAd && (
                 <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
                   Editing {editingAd.type} ad · π{editingAd.availableAmount} remaining
-                  {editingAd.type === 'sell' && ' · To increase Pi amount, cancel and re-create.'}
+                  {editingAd.type === 'sell' &&
+                    ' · To increase Pi amount, cancel and re-create.'}
                 </p>
               )}
               {view === 'create' && <div className="mb-6" />}
 
-              {error && (
-                <div className="mb-4 px-4 py-3 rounded-lg text-sm"
-                  style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  {error}
-                </div>
-              )}
+              <ErrorBanner message={error} />
 
-              <form onSubmit={view === 'create' ? handleCreate : handleEdit} className="space-y-6">
+              <form
+                onSubmit={view === 'create' ? handleCreate : handleEdit}
+                className="space-y-6"
+              >
 
-                {/* ── Ad Type (create only) ─────────────────────────────── */}
+                {/* ── Ad Type (create only) ──────────────────────────────── */}
                 {view === 'create' && (
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                    <label
+                      className="block text-sm font-medium mb-2"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
                       Ad Type
                     </label>
                     <div className="flex gap-3">
                       {(['buy', 'sell'] as AdType[]).map((t) => (
-                        <button key={t} type="button"
-                          onClick={() => setForm((f) => ({ ...f, type: t }))}
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({ ...f, type: t }));
+                            // Reset account selection when switching types
+                            setSelectedSellerAccount(null);
+                          }}
                           className={`flex-1 py-3 rounded-xl font-semibold text-sm transition-all ${
                             form.type === t
                               ? t === 'buy' ? 'btn-buy' : 'btn-sell'
                               : 'btn-ghost'
-                          }`}>
+                          }`}
+                        >
                           {t === 'buy' ? '🟢 I want to Buy Pi' : '🔴 I want to Sell Pi'}
                         </button>
                       ))}
@@ -688,10 +676,13 @@ export default function PostAdPage() {
                   </div>
                 )}
 
-                {/* ── Numeric fields ────────────────────────────────────── */}
+                {/* ── Numeric fields ─────────────────────────────────────── */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                    <label
+                      className="block text-sm font-medium mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
                       Pi Amount
                       {isEditSell && (
                         <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -699,18 +690,28 @@ export default function PostAdPage() {
                         </span>
                       )}
                     </label>
-                    <input className="input-dark" type="number" placeholder="100"
-                      value={form.piAmount} min={1}
+                    <input
+                      className="input-dark"
+                      type="number"
+                      placeholder="100"
+                      value={form.piAmount}
+                      min={1}
                       max={isEditSell ? editMaxPi : undefined}
                       onChange={(e) => setForm((f) => ({ ...f, piAmount: e.target.value }))}
-                      required />
-                    {/* Balance warning — sell + create only */}
+                      required
+                    />
                     {view === 'create' && form.type === 'sell' && form.piAmount && !hasSufficient && (
-                      <p className="mt-1.5 text-xs flex items-center gap-1" style={{ color: '#f87171' }}>
+                      <p
+                        className="mt-1.5 text-xs flex items-center gap-1"
+                        style={{ color: '#f87171' }}
+                      >
                         ⚠ Need π{balanceShort.toFixed(4)} more —&nbsp;
-                        <button type="button" className="underline"
+                        <button
+                          type="button"
+                          className="underline"
                           style={{ color: 'var(--pi-gold)' }}
-                          onClick={() => { setShortfall(balanceShort); setShowDeposit(true); }}>
+                          onClick={() => { setShortfall(balanceShort); setShowDeposit(true); }}
+                        >
                           Deposit now
                         </button>
                       </p>
@@ -718,38 +719,70 @@ export default function PostAdPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Price per Pi (₦)</label>
-                    <input className="input-dark" type="number" placeholder="5000"
+                    <label
+                      className="block text-sm font-medium mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Price per Pi (₦)
+                    </label>
+                    <input
+                      className="input-dark"
+                      type="number"
+                      placeholder="5000"
                       value={form.pricePerPi}
                       onChange={(e) => setForm((f) => ({ ...f, pricePerPi: e.target.value }))}
-                      required />
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Min Limit (₦)</label>
-                    <input className="input-dark" type="number" placeholder="1000"
+                    <label
+                      className="block text-sm font-medium mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Min Limit (₦)
+                    </label>
+                    <input
+                      className="input-dark"
+                      type="number"
+                      placeholder="1000"
                       value={form.minLimit}
                       onChange={(e) => setForm((f) => ({ ...f, minLimit: e.target.value }))}
-                      required />
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Max Limit (₦)</label>
-                    <input className="input-dark" type="number" placeholder="500000"
+                    <label
+                      className="block text-sm font-medium mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Max Limit (₦)
+                    </label>
+                    <input
+                      className="input-dark"
+                      type="number"
+                      placeholder="500000"
                       value={form.maxLimit}
                       onChange={(e) => setForm((f) => ({ ...f, maxLimit: e.target.value }))}
-                      required />
+                      required
+                    />
                   </div>
                 </div>
 
-                {/* ── Balance banner (sell + create) ───────────────────── */}
+                {/* ── Balance banner (sell + create) ────────────────────── */}
                 {view === 'create' && form.type === 'sell' && wallet && (
-                  <div className="rounded-xl p-4"
+                  <div
+                    className="rounded-xl p-4"
                     style={{
                       background: hasSufficient ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
                       border:     `1px solid ${hasSufficient ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                    }}>
+                    }}
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium" style={{ color: hasSufficient ? '#4ade80' : '#f87171' }}>
+                        <p
+                          className="text-sm font-medium"
+                          style={{ color: hasSufficient ? '#4ade80' : '#f87171' }}
+                        >
                           {hasSufficient ? '✅ Sufficient balance' : '⚠ Insufficient balance'}
                         </p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
@@ -758,9 +791,11 @@ export default function PostAdPage() {
                         </p>
                       </div>
                       {!hasSufficient && (
-                        <button type="button"
+                        <button
+                          type="button"
                           onClick={() => { setShortfall(balanceShort); setShowDeposit(true); }}
-                          className="btn-pi text-xs px-3 py-1.5 rounded-lg">
+                          className="btn-pi text-xs px-3 py-1.5 rounded-lg"
+                        >
                           + Deposit π{balanceShort.toFixed(4)}
                         </button>
                       )}
@@ -769,236 +804,85 @@ export default function PostAdPage() {
                 )}
 
                 {/* ════════════════════════════════════════════════════════
-                    SELL AD — pick from saved accounts or add new
+                    SELL AD — single payment account (PaymentAccountPicker)
                 ════════════════════════════════════════════════════════ */}
                 {form.type === 'sell' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Payment Accounts <span style={{ color: '#f87171' }}>*</span>
-                      </label>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Buyers will pay to these accounts
-                      </span>
-                    </div>
-
-                    {/* Saved accounts list */}
-                    {loadingSaved ? (
-                      <div className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>
-                        Loading your accounts…
-                      </div>
-                    ) : savedMethods.length === 0 && !showNewAccount ? (
-                      <div className="rounded-xl p-5 text-center mb-3"
-                        style={{ background: 'var(--bg-elevated)', border: '1px dashed var(--border)' }}>
-                        <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                          No saved payment accounts yet. Add one below.
-                        </p>
-                        <button type="button" onClick={() => setShowNewAccount(true)}
-                          className="btn-pi text-sm px-4 py-2 rounded-lg">
-                          + Add Account
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 mb-3">
-                        {savedMethods.map((pm) => {
-                          const selected = form.selectedPmIds.includes(pm._id);
-                          return (
-                            <button key={pm._id} type="button"
-                              onClick={() => toggleSavedAccount(pm._id)}
-                              className="w-full text-left rounded-xl p-4 transition-all"
-                              style={{
-                                background:   selected ? 'rgba(240,160,60,0.1)'  : 'var(--bg-elevated)',
-                                border:       `1px solid ${selected ? 'rgba(240,160,60,0.4)' : 'var(--border)'}`,
-                              }}>
-                              <div className="flex items-center gap-3">
-                                {/* Checkbox indicator */}
-                                <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-                                  style={{
-                                    background:   selected ? 'var(--pi-gold)' : 'transparent',
-                                    border:       `2px solid ${selected ? 'var(--pi-gold)' : 'var(--border)'}`,
-                                  }}>
-                                  {selected && (
-                                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                      <path d="M1 4l3 3 5-6" stroke="#0a0a0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                  )}
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-sm" style={{ color: selected ? 'var(--pi-gold)' : 'var(--text-primary)' }}>
-                                      {pm.accountName}
-                                    </span>
-                                    {pm.isDefault && (
-                                      <span className="text-xs px-1.5 py-0.5 rounded"
-                                        style={{ background: 'rgba(240,160,60,0.15)', color: 'var(--pi-gold)' }}>
-                                        Default
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                                    {PAYMENT_METHOD_LABELS[pm.type]}
-                                    {pm.bankName && ` · ${pm.bankName}`}
-                                    {' · '}
-                                    <span style={{ fontFamily: 'var(--font-mono)' }}>{pm.accountNumber}</span>
-                                  </p>
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-
-                        {/* Add new account button (when some already exist) */}
-                        {!showNewAccount && (
-                          <button type="button" onClick={() => setShowNewAccount(true)}
-                            className="w-full rounded-xl p-3 text-sm transition-all"
-                            style={{
-                              background:  'transparent',
-                              border:      '1px dashed var(--border)',
-                              color:       'var(--text-muted)',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(240,160,60,0.3)'; e.currentTarget.style.color = 'var(--pi-gold)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
-                            + Add new payment account
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── Inline new account form ──────────────────────── */}
-                    {showNewAccount && (
-                      <div className="rounded-xl p-5 mt-2"
-                        style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(240,160,60,0.2)' }}>
-                        <div className="flex items-center justify-between mb-4">
-                          <p className="text-sm font-semibold" style={{ color: 'var(--pi-gold)' }}>
-                            New Payment Account
-                          </p>
-                          <button type="button" onClick={() => setShowNewAccount(false)}
-                            className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            Cancel
-                          </button>
-                        </div>
-
-                        {/* Account type */}
-                        <div className="mb-3">
-                          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-                            Account Type
-                          </label>
-                          <div className="flex flex-wrap gap-2">
-                            {ALL_PAYMENT_TYPES.map((t) => (
-                              <button key={t} type="button"
-                                onClick={() => setNewAccount((a) => ({ ...a, type: t, label: PAYMENT_METHOD_LABELS[t] }))}
-                                className="text-xs px-3 py-1.5 rounded-lg border transition-all"
-                                style={{
-                                  background:  newAccount.type === t ? 'rgba(240,160,60,0.15)' : 'var(--bg-card)',
-                                  color:       newAccount.type === t ? 'var(--pi-gold)'         : 'var(--text-secondary)',
-                                  borderColor: newAccount.type === t ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
-                                }}>
-                                {PAYMENT_METHOD_LABELS[t]}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Account fields */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                          <div>
-                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Account Name *</label>
-                            <input className="input-dark text-sm" placeholder="John Doe"
-                              value={newAccount.accountName}
-                              onChange={(e) => setNewAccount((a) => ({ ...a, accountName: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Account Number *</label>
-                            <input className="input-dark text-sm" placeholder="0123456789"
-                              value={newAccount.accountNumber}
-                              onChange={(e) => setNewAccount((a) => ({ ...a, accountNumber: e.target.value }))} />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
-                              Bank Name {newAccount.type === 'bank_transfer' ? '*' : '(optional)'}
-                            </label>
-                            <input className="input-dark text-sm" placeholder="GTBank"
-                              value={newAccount.bankName}
-                              onChange={(e) => setNewAccount((a) => ({ ...a, bankName: e.target.value }))} />
-                          </div>
-                        </div>
-
-                        {/* Set as default toggle */}
-                        <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
-                          <div
-                            onClick={() => setNewAccount((a) => ({ ...a, isDefault: !a.isDefault }))}
-                            className="w-10 h-6 rounded-full relative transition-colors flex-shrink-0"
-                            style={{ background: newAccount.isDefault ? 'var(--pi-gold)' : 'var(--border)' }}>
-                            <div className="absolute top-1 w-4 h-4 rounded-full bg-white transition-all"
-                              style={{ left: newAccount.isDefault ? '22px' : '4px' }} />
-                          </div>
-                          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Set as default account</span>
-                        </label>
-
-                        <button type="button" onClick={handleAddNewAccount}
-                          disabled={savingAccount}
-                          className="btn-pi w-full py-2.5 rounded-xl text-sm">
-                          {savingAccount ? 'Saving…' : 'Save & Select Account'}
-                        </button>
-                      </div>
-                    )}
-
-                    {form.selectedPmIds.length === 0 && !showNewAccount && savedMethods.length > 0 && (
-                      <p className="text-xs mt-2" style={{ color: '#f87171' }}>
-                        Select at least one account for buyers to pay to.
-                      </p>
-                    )}
-                  </div>
+                  <PaymentAccountPicker
+                    selectedPaymentAccount={selectedSellerAccount}
+                    setSelectedPaymentAccount={setSelectedSellerAccount}
+                    label="Payment Account"
+                    hint="Buyers will pay to this account"
+                    required
+                  />
                 )}
 
                 {/* ════════════════════════════════════════════════════════
-                    BUY AD — accepted payment types only (no account details)
+                    BUY AD — accepted payment types + Pi wallet
                 ════════════════════════════════════════════════════════ */}
-                {form.type === 'buy' && (
+                <div className="space-y-5">
+                  {/* Accepted payment method types */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        Accepted Payment Methods <span style={{ color: '#f87171' }}>*</span>
+                      <label
+                        className="text-sm font-medium"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        Accepted Payment Methods{' '}
+                        <span style={{ color: '#f87171' }}>*</span>
                       </label>
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         How you want sellers to pay you
                       </span>
                     </div>
-
                     <div className="flex flex-wrap gap-2">
                       {ALL_PAYMENT_TYPES.map((t) => {
                         const active = form.acceptedTypes.includes(t);
                         return (
-                          <button key={t} type="button" onClick={() => toggleAcceptedType(t)}
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => toggleAcceptedType(t)}
                             className="px-4 py-2 rounded-lg border text-sm transition-all"
                             style={{
                               background:  active ? 'rgba(240,160,60,0.15)' : 'var(--bg-elevated)',
                               color:       active ? 'var(--pi-gold)'         : 'var(--text-secondary)',
                               borderColor: active ? 'rgba(240,160,60,0.4)'   : 'var(--border)',
-                            }}>
+                            }}
+                          >
                             {active && <span className="mr-1">✓</span>}
                             {PAYMENT_METHOD_LABELS[t]}
                           </button>
                         );
                       })}
                     </div>
-
                     {form.acceptedTypes.length === 0 && (
                       <p className="text-xs mt-2" style={{ color: '#f87171' }}>
                         Select at least one payment method.
                       </p>
                     )}
                   </div>
-                )}
 
-                {/* ── Payment Window ────────────────────────────────────── */}
+                  {/* Pi wallet where Pi is released on trade completion */}
+                  {form.type === "buy" && <PiWalletPicker
+                    selectedPiWalletId={selectedPiWalletId}
+                    setSelectedPiWalletId={setSelectedPiWalletId}
+                  />}
+                </div>
+
+                {/* ── Payment Window ─────────────────────────────────────── */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Payment Window</label>
-                    <select className="input-dark"
+                    <label
+                      className="block text-sm font-medium mb-1.5"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Payment Window
+                    </label>
+                    <select
+                      className="input-dark"
                       value={form.paymentWindow}
-                      onChange={(e) => setForm((f) => ({ ...f, paymentWindow: e.target.value }))}>
+                      onChange={(e) => setForm((f) => ({ ...f, paymentWindow: e.target.value }))}
+                    >
                       {[10, 15, 20, 30, 45, 60].map((m) => (
                         <option key={m} value={m}>{m} minutes</option>
                       ))}
@@ -1006,41 +890,63 @@ export default function PostAdPage() {
                   </div>
                 </div>
 
-                {/* ── Terms ────────────────────────────────────────────── */}
+                {/* ── Terms ──────────────────────────────────────────────── */}
                 <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Terms (optional)</label>
-                  <textarea className="input-dark text-sm" rows={3}
+                  <label
+                    className="block text-sm font-medium mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Terms (optional)
+                  </label>
+                  <textarea
+                    className="input-dark text-sm"
+                    rows={3}
                     placeholder="Any special terms for traders…"
                     value={form.terms}
                     onChange={(e) => setForm((f) => ({ ...f, terms: e.target.value }))}
-                    style={{ resize: 'none' }} />
+                    style={{ resize: 'none' }}
+                  />
                 </div>
 
-                {/* ── Auto-reply ────────────────────────────────────────── */}
+                {/* ── Auto-reply ─────────────────────────────────────────── */}
                 <div>
-                  <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Auto-reply (optional)</label>
-                  <input className="input-dark text-sm"
+                  <label
+                    className="block text-sm font-medium mb-1.5"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Auto-reply (optional)
+                  </label>
+                  <input
+                    className="input-dark text-sm"
                     placeholder="Message sent automatically when trade starts…"
                     value={form.autoReply}
-                    onChange={(e) => setForm((f) => ({ ...f, autoReply: e.target.value }))} />
+                    onChange={(e) => setForm((f) => ({ ...f, autoReply: e.target.value }))}
+                  />
                 </div>
 
-                {/* ── Submit ────────────────────────────────────────────── */}
+                {/* ── Submit ─────────────────────────────────────────────── */}
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setView('list')} className="btn-ghost px-6 py-3 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setView('list')}
+                    className="btn-ghost px-6 py-3 rounded-xl"
+                  >
                     Cancel
                   </button>
-                  <button type="submit"
+                  <button
+                    type="submit"
                     disabled={
                       saving ||
                       (view === 'create' && form.type === 'sell' && !hasSufficient) ||
                       !sellMethodsValid ||
-                      !buyMethodsValid
+                      !buyMethodsValid  ||
+                      !buyWalletValid
                     }
-                    className="btn-pi flex-1 py-3 rounded-xl text-base">
+                    className="btn-pi flex-1 py-3 rounded-xl text-base"
+                  >
                     {saving
                       ? (view === 'create' ? 'Posting…' : 'Saving…')
-                      : (view === 'create' ? 'Post Ad' : 'Save Changes')
+                      : (view === 'create' ? 'Post Ad'  : 'Save Changes')
                     }
                   </button>
                 </div>
@@ -1051,13 +957,19 @@ export default function PostAdPage() {
         </div>
       </div>
 
-      {/* ── Deposit modal ───────────────────────────────────────────────────── */}
+      {/* ── Deposit modal ──────────────────────────────────────────────────── */}
       {showDeposit && (
         <DepositModal
           accessToken={user?.piUid ?? null}
-          suggestedAmount={shortfall > 0 ? Math.ceil((shortfall / (1 - 0.01)) * 10_000) / 10_000 : undefined}
+          suggestedAmount={
+            shortfall > 0
+              ? Math.ceil((shortfall / (1 - 0.01)) * 10_000) / 10_000
+              : undefined
+          }
           onDepositComplete={(newBal) => {
-            setWallet((w) => w ? { ...w, piBalance: newBal, totalHeld: newBal + (w.lockedBalance ?? 0) } : w);
+            setWallet((w) =>
+              w ? { ...w, piBalance: newBal, totalHeld: newBal + (w.lockedBalance ?? 0) } : w,
+            );
             setShowDeposit(false);
             showToast('Deposit confirmed — you can now post your ad');
           }}

@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/hooks/useAuth';
 import Script from 'next/script';
 import PiInit from '@/lib/PiInit';
+import { ThemeProvider } from '@/hooks/useTheme';
 
 export const metadata: Metadata = {
   title: 'Pi P2P — Trade Pi Securely',
@@ -17,7 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           src="https://sdk.minepi.com/pi-sdk.js"
           strategy="beforeInteractive"
         />
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>          
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
+        
         <PiInit />
       </body>
     </html>

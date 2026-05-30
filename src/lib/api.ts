@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { logger } from './logger';
-import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo } from '@/types';
+import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -49,19 +49,38 @@ export const authApi = {
     apiClient.patch('/auth/profile', data),
 };
 
-// ─── Saved payment methods ────────────────────────────────────────────────────
+// ─── Saved account details ────────────────────────────────────────────────────
 
 export const paymentMethodsApi = {
   getAll:     () =>
-    apiClient.get<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>('/auth/payment-methods'),
+    apiClient.get<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>('/auth/account-details'),
   add:        (data: NewPaymentMethodDetail) =>
-    apiClient.post<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>('/auth/payment-methods', data),
+    apiClient.post<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>('/auth/account-details', data),
   update:     (pmId: string, data: Partial<NewPaymentMethodDetail>) =>
-    apiClient.patch<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>(`/auth/payment-methods/${pmId}`, data),
+    apiClient.patch<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>(`/auth/account-details/${pmId}`, data),
   remove:     (pmId: string) =>
-    apiClient.delete<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>(`/auth/payment-methods/${pmId}`),
+    apiClient.delete<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>(`/auth/account-details/${pmId}`),
   setDefault: (pmId: string) =>
-    apiClient.patch<{ success: boolean; paymentMethods: PaymentMethodDetail[] }>(`/auth/payment-methods/${pmId}/set-default`),
+    apiClient.patch<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>(`/auth/account-details/${pmId}/set-default`),
+};
+
+// ─── Pi Wallet Addresses ──────────────────────────────────────────────────────
+
+export const piWalletsApi = {
+  getAll: () =>
+    apiClient.get<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>('/auth/pi-wallets'),
+
+  add: (data: NewPiWalletAddress) =>
+    apiClient.post<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>('/auth/pi-wallets', data),
+
+  update: (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) =>
+    apiClient.patch<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>(`/auth/pi-wallets/${waId}`, data),
+
+  remove: (waId: string) =>
+    apiClient.delete<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>(`/auth/pi-wallets/${waId}`),
+
+  setDefault: (waId: string) =>
+    apiClient.patch<{ success: boolean; piWalletAddresses: PiWalletAddress[] }>(`/auth/pi-wallets/${waId}/set-default`),
 };
 
 // ─── Wallet ───────────────────────────────────────────────────────────────────
@@ -86,10 +105,23 @@ export const walletApi = {
 // ─── Ads ──────────────────────────────────────────────────────────────────────
 
 export const adsApi = {
+  createAd:  (data: {
+    type:                 AdType;
+    piAmount:             number;
+    minLimit:             number;
+    maxLimit:             number;
+    pricePerPi:           number;
+    currency?:            string;
+    paymentMethods:       PaymentMethodType[];
+    sellerAccountDetailId?: string;
+    buyerPiWalletId?: string;
+    paymentWindow:        number;
+    terms?:               string;
+    autoReply?:           string;
+  }) => apiClient.post('/ads', data),
   getAds:    (params?: Record<string, string | number>) => apiClient.get('/ads', { params }),
   getAdById: (id: string) => apiClient.get(`/ads/${id}`),
   getMyAds:  () => apiClient.get('/ads/my'),
-  createAd:  (data: unknown) => apiClient.post('/ads', data),
   updateAd:  (id: string, data: unknown) => apiClient.patch(`/ads/${id}`, data),
   deleteAd:  (id: string) => apiClient.delete(`/ads/${id}`),
   hardDeleteAd: (id: string) => apiClient.delete(`/ads/${id}/hard`),
@@ -98,7 +130,7 @@ export const adsApi = {
 // ─── Orders ───────────────────────────────────────────────────────────────────
 
 export const ordersApi = {
-  createOrder: (data: { adId: string; piAmount: number; paymentMethod: string; buyerWalletAddress: string }) =>
+  createOrder: (data: { adId: string; piAmount: number; paymentMethod: PaymentMethodType; sellerAccountDetailId?: string, buyerWalletAddressId?: string }) =>
     apiClient.post('/orders', data),
   getOrders:   (params?: Record<string, string>) => apiClient.get('/orders', { params }),
   getOrderById:(id: string) => apiClient.get(`/orders/${id}`),
