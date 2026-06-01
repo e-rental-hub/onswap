@@ -456,7 +456,7 @@ export default function AdDetailPage() {
   const actionLabel = isBuyAd ? 'Sell Pi'    : 'Buy Pi';
   const ctaColor    = isBuyAd ? 'btn-sell'   : 'btn-buy';
   const accentColor = isBuyAd ? '#f87171'    : '#4ade80';
-  const badgeClass  = isBuyAd ? 'badge-sell' : 'badge-buy';
+  const badgeClass  = isBuyAd ? 'badge-buy' : 'badge-sell';
 
   // sell-ad summary: the ad creator's payment detail that matches the viewer's choice
   const matchedDetail: AdPaymentDetail | undefined = isSellAd
@@ -549,7 +549,7 @@ export default function AdDetailPage() {
                   </div>
                 </div>
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${badgeClass}`}>
-                  {ad.type.toUpperCase()}
+                  {ad.type.toUpperCase()} AD
                 </span>
               </div>
 
@@ -738,32 +738,36 @@ export default function AdDetailPage() {
                   </div>
 
                   {/* Amount input */}
-                  <div className="mb-3">
-                    <label
-                      className="block text-xs font-medium mb-1.5"
-                      style={{ color: 'var(--text-secondary)' }}
+                  <div
+                    className="flex items-center rounded-xl overflow-hidden"
+                    style={{
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-input)',
+                    }}
+                  >
+                    <div
+                      className="px-3 font-bold text-sm flex-shrink-0"
+                      style={{
+                        color: inputMode === 'pi'
+                          ? 'var(--pi-gold)'
+                          : 'var(--text-secondary)',
+                      }}
                     >
-                      {inputMode === 'pi' ? 'Pi Amount' : 'Naira Amount'}
-                    </label>
-                    <div className="relative">
-                      <span
-                        className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-sm"
-                        style={{
-                          color: inputMode === 'pi' ? 'var(--pi-gold)' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {inputMode === 'pi' ? 'π' : '₦'}
-                      </span>
-                      <input
-                        className="input-dark pl-8 pr-3 text-base font-semibold w-full"
-                        type="number"
-                        step={inputMode === 'pi' ? '0.0001' : '1'}
-                        min={0}
-                        placeholder={inputMode === 'pi' ? '0.0000' : '0'}
-                        value={rawInput}
-                        onChange={(e) => { setRawInput(e.target.value); setError(''); }}
-                      />
+                      {inputMode === 'pi' ? 'π' : '₦'}
                     </div>
+
+                    <input
+                      className="input-dark border-0 rounded-none flex-1 text-base font-semibold"
+                      type="number"
+                      step={inputMode === 'pi' ? '0.0001' : '1'}
+                      min={0}
+                      placeholder={inputMode === 'pi' ? '0.0000' : '0'}
+                      value={rawInput}
+                      onChange={(e) => {
+                        setRawInput(e.target.value);
+                        setError('');
+                      }}
+                    />
                   </div>
 
                   {/* Live conversion */}
