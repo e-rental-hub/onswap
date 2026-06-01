@@ -16,6 +16,7 @@ import { logger }   from '@/lib/logger';
 import { useToast } from '@/hooks/useToast';
 import { ALL_PAYMENT_TYPES } from '@/lib/constants';
 import BottomNav from '@/components/layout/BottomNav';
+import { useCurrency } from '@/hooks/useCurrency';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -259,6 +260,7 @@ export default function PostAdPage() {
   const { isAuthenticated, user } = useAuth();
   const router = useRouter();
   const { toast, toastErr, showToast } = useToast();
+  const {currency,} = useCurrency()
 
   // ── Core state ─────────────────────────────────────────────────────────────
   const [myAds,       setMyAds]       = useState<Ad[]>([]);
@@ -724,7 +726,7 @@ export default function PostAdPage() {
                       className="block text-sm font-medium mb-1.5"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      Price per Pi (₦)
+                      Price per Pi ({currency.symbol})
                     </label>
                     <input
                       className="input-dark"
@@ -740,7 +742,7 @@ export default function PostAdPage() {
                       className="block text-sm font-medium mb-1.5"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      Min Limit (₦)
+                      Min Limit ({currency.symbol})
                     </label>
                     <input
                       className="input-dark"
@@ -756,7 +758,7 @@ export default function PostAdPage() {
                       className="block text-sm font-medium mb-1.5"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      Max Limit (₦)
+                      Max Limit ({currency.symbol})
                     </label>
                     <input
                       className="input-dark"

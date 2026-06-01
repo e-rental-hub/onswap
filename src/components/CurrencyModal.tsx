@@ -1,4 +1,6 @@
+import { useCurrency } from "@/hooks/useCurrency";
 import { CURRENCIES } from "@/lib/constants";
+import { CurrencyEnum } from "@/types";
 
 // ── Currency Picker Modal ─────────────────────────────────────────────────────
 export function CurrencyModal({
@@ -7,9 +9,10 @@ export function CurrencyModal({
   onClose,
 }: {
   selected: string;
-  onSelect: (code: string) => void;
+  onSelect: (code: CurrencyEnum) => void;
   onClose: () => void;
 }) {
+  const {currency, setCode} = useCurrency()
   return (
     <div
       onClick={onClose}
@@ -41,7 +44,7 @@ export function CurrencyModal({
             return (
               <button
                 key={c.code}
-                onClick={() => { onSelect(c.code); onClose(); }}
+                onClick={() => { onSelect(c.code); setCode(c.code); onClose(); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '14px',
                   padding: '14px 16px', borderRadius: '14px', cursor: 'pointer',

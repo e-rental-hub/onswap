@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import AdCard from '@/components/p2p/AdCard';
 import { adsApi } from '@/lib/api';
-import { Ad, AdType, PaymentMethodType } from '@/types';
+import { Ad, AdType, CurrencyEnum, PaymentMethodType } from '@/types';
 import { logger } from '@/lib/logger';
 import BottomNav from '@/components/layout/BottomNav';
 import { CURRENCIES, MarketMode, PAYMENT_OPTIONS } from '@/lib/constants';
@@ -56,8 +56,27 @@ function ExpressPanel({ currency }: { currency: typeof CURRENCIES[0] }) {
     <div style={{
       maxWidth: '440px', margin: '0 auto',
       animation: 'fadeIn 0.25s ease',
-    }}>
+    }}
+    className='relative'
+    >
       <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      <div className="absolute inset-0 z-50 flex items-center justify-center px-4"
+        style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
+        <div className="w-full max-w-md rounded-2xl p-6 relative animate-slide-up"
+          style={{ background: 'var(--bg-card)', border: '1px solid rgba(240,160,60,0.2)' }}>
+
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-bold" style={{ fontFamily: 'var(--font-display)' }}>
+                Coming<span className="pi-text">Soon</span>
+              </h2>
+            </div>
+            
+          </div>
+        </div>
+      </div>
 
       {/* Rate banner */}
       <div style={{
@@ -237,14 +256,14 @@ function ExpressPanel({ currency }: { currency: typeof CURRENCIES[0] }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function P2PMarketPage() {
-  const [mode, setMode] = useState<MarketMode>('express');
+  const [mode, setMode] = useState<MarketMode>('p2p');
   const [tab, setTab] = useState<AdType>('buy');
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethodType | ''>('');
   const [amountFilter, setAmountFilter] = useState('');
   const [total, setTotal] = useState(0);
-  const [currencyCode, setCurrencyCode] = useState('NGN');
+  const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(CurrencyEnum.NGN);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
   const currency = CURRENCIES.find((c) => c.code === currencyCode) ?? CURRENCIES[0];

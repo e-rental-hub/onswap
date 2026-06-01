@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { WalletCard } from '@/components/p2p/WalletCard';
-import { PAYMENT_METHOD_LABELS, PaymentMethodDetail, WalletSummary } from '@/types';
+import { CurrencyEnum, PAYMENT_METHOD_LABELS, PaymentMethodDetail, WalletSummary } from '@/types';
 import { useToast } from '@/hooks/useToast';
 import { logger } from '@/lib/logger';
 import { walletApi } from '@/lib/api';
@@ -12,6 +12,7 @@ import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
 import PaymentAccountPicker from '@/components/p2p/paymentAccountPicker';
 import BottomNav from '@/components/layout/BottomNav';
 import PiWalletPicker from '@/components/p2p/PiWalletAddressPicker';
+import { CurrencyModal } from '@/components/CurrencyModal';
 
 // ── mock user – replace with your auth context ──────────────────────────────
 const MOCK_USER = {
@@ -173,6 +174,10 @@ export default function ProfilePage() {
   const [wallet,      setWallet]      = useState<WalletSummary | null>(null);
   const [selectedSellerAccount, setSelectedSellerAccount] = useState<PaymentMethodDetail | null>(null);
   const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
+  const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(CurrencyEnum.NGN);
+  const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+
+  const currency = CURRENCIES.find((c) => c.code === currencyCode) ?? CURRENCIES[0];
 
   const u = {
     displayName: user?.displayName || user?.username,
@@ -200,16 +205,6 @@ export default function ProfilePage() {
   }, [loadWallet]);
 
   const sections: MenuSection[] = [
-    {
-      title: 'Account',
-      items: [
-        {
-          icon: Icon.user, label: 'Preferred Currency',
-          sublabel: CURRENCIES.find(c => c.code === user?.preferredCurrency)?.label || 'Set your currency',
-          name: 'account-details', chevron: true,
-        },
-      ],
-    },
     {
       title: 'Info',
       items: [
@@ -342,12 +337,12 @@ export default function ProfilePage() {
       {/* ── menu sections ─────────────────────────────────────────── */}
       <div className='flex-col space-y-4'  style={{ padding: '16px', maxWidth: '640px', margin: '0 auto' }}>
         <p style={{
-              fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', color: 'var(--text-muted)',
-              padding: '0 4px', marginBottom: '8px',
-            }}>
-              Account
-            </p>
+          fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em',
+          textTransform: 'uppercase', color: 'var(--text-muted)',
+          padding: '0 4px', marginBottom: '8px',
+        }}>
+          Account
+        </p>
         <PaymentAccountPicker
           selectedPaymentAccount={selectedSellerAccount}
           setSelectedPaymentAccount={setSelectedSellerAccount}
@@ -382,6 +377,23 @@ export default function ProfilePage() {
           selectedPiWalletId={selectedPiWalletId}
           setSelectedPiWalletId={setSelectedPiWalletId}
         />
+
+        {/* Currency picker button */}
+          <button
+            onClick={() => setShowCurrencyModal(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '10px 16px', borderRadius: '14px', cursor: 'pointer',
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+          >
+            <span style={{ fontSize: '20px' }}>{currency.flag}</span>
+            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{currency.code}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
+          </button>
 
         {sections.map((section) => (
           <div key={section.title} style={{ marginBottom: '24px' }}>
@@ -492,6 +504,15 @@ export default function ProfilePage() {
         <LogoutModal
           onConfirm={logout}
           onCancel={() => setShowLogout(false)}
+        />
+      )}
+
+      {/* Currency modal */}
+      {showCurrencyModal && (
+        <CurrencyModal
+          selected={currencyCode}
+          onSelect={setCurrencyCode}
+          onClose={() => setShowCurrencyModal(false)}
         />
       )}
       <BottomNav />

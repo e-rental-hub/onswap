@@ -282,6 +282,6 @@ export enum EscrowStatusEnum {
 }
 
 export enum CurrencyEnum {
-  naira        = 'NGN',
-  kenyaShilling = 'KES',
+  NGN        = 'NGN',
+  KES = 'KES',
 }
