@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress } from '@/types';
+import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress, CurrencyEnum } from '@/types';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -103,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     // localStorage.removeItem(TOKEN_KEY);
     // localStorage.removeItem(USER_KEY);
+    setAuthToken(null);
     setToken(null);
     setUser(null);
     logger.info('Logged out');
