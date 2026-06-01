@@ -54,6 +54,10 @@ function WalletRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+
+  const shortAddress =
+  `${wallet.address.slice(0, 6)}...${wallet.address.slice(-6)}`;
+
   return (
     <button
       type="button"
@@ -101,7 +105,7 @@ function WalletRow({
             className="text-xs mt-0.5 truncate"
             style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
           >
-            {wallet.address}
+            {shortAddress}
           </p>
         </div>
       </div>
