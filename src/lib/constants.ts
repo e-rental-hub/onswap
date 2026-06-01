@@ -3,3 +3,20 @@ import { PaymentMethodType } from "@/types";
 export const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
   'bank_transfer',
 ];
+
+export const CURRENCIES = [
+  { code: 'NGN', symbol: '₦', flag: '🇳🇬', label: 'Nigerian Naira' },
+  { code: 'KES', symbol: 'KSh', flag: '🇰🇪', label: 'Kenyan Shilling' },
+//   { code: 'GHS', symbol: '₵', flag: '🇬🇭', label: 'Ghanaian Cedi' },
+//   { code: 'ZAR', symbol: 'R',  flag: '🇿🇦', label: 'South African Rand' },
+//   { code: 'USD', symbol: '$',  flag: '🇺🇸', label: 'US Dollar' },
+];
+
+export type MarketMode = 'express' | 'p2p';
+
+export const PAYMENT_OPTIONS: { value: PaymentMethodType | ''; label: string }[] = [
+  { value: '', label: 'All Methods' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+];
+
+export const PLATFORM_FEE = 0.01; // 1%
