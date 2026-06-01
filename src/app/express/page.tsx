@@ -415,7 +415,7 @@ export default function ExpressPage() {
                 onClick={() => router.push('/auth/login')}
                 style={{
                   width: '100%', padding: '17px', borderRadius: '16px', fontSize: '16px', fontWeight: 800,
-                  border: 'none', cursor: 'pointer', background: 'rgba(244,160,23,0.15)',
+                  cursor: 'pointer', background: 'rgba(244,160,23,0.15)',
                   color: '#f4a017', border: '1px solid rgba(244,160,23,0.3)',
                 }}
               >
