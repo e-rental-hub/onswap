@@ -72,7 +72,7 @@ export default function BottomNav() {
           bottom: 0,
           left: 0,
           right: 0,
-          zIndex: 50,
+          zIndex: 40,
           background: 'var(--bg-card)',
           borderTop: '1px solid var(--border)',
           backdropFilter: 'blur(16px)',
