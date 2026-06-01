@@ -271,7 +271,8 @@ export default function P2PMarketPage() {
   const fetchAds = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number> = { type: tab, currency: currencyCode };
+      const reversedTab = tab === 'buy' ? 'sell' : 'buy'; // If user is on "Buy" tab, we fetch "Sell" ads and vice versa
+      const params: Record<string, string | number> = { type: reversedTab, currency: currencyCode };
       if (paymentFilter) params.paymentMethod = paymentFilter;
       if (amountFilter) params.minAmount = Number(amountFilter);
       const res = await adsApi.getAds(params);
