@@ -7,7 +7,7 @@ import {
   useCallback,
   ReactNode,
 } from 'react';
-import { authApi, paymentMethodsApi, piWalletsApi } from '@/lib/api';
+import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress } from '@/types';
 
@@ -61,20 +61,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Restore session from localStorage on mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
-    const storedUser = localStorage.getItem(USER_KEY);
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        logger.warn('Corrupt stored user — clearing');
-        localStorage.removeItem(USER_KEY);
-      }
-    }
-    setLoading(false);
-  }, []);
+  // useEffect(() => {
+  //   const storedToken = localStorage.getItem(TOKEN_KEY);
+  //   const storedUser = localStorage.getItem(USER_KEY);
+  //   if (storedToken && storedUser) {
+  //     setToken(storedToken);
+  //     try {
+  //       setUser(JSON.parse(storedUser));
+  //     } catch {
+  //       logger.warn('Corrupt stored user — clearing');
+  //       localStorage.removeItem(USER_KEY);
+  //     }
+  //   }
+  //   setLoading(false);
+  // }, []);
 
   // ── Pi login / register ──────────────────────────────────────────────────────
 
@@ -88,8 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authApi.piAuth({ accessToken, uid, username, displayName });
       const { token: t, user: u } = res.data as { token: string; user: User };
 
-      localStorage.setItem(TOKEN_KEY, t);
-      localStorage.setItem(USER_KEY, JSON.stringify(u));
+      // localStorage.setItem(TOKEN_KEY, t);
+      // localStorage.setItem(USER_KEY, JSON.stringify(u));
+      setAuthToken(t);
       setToken(t);
       setUser(u);
       logger.info(`Pi auth success: ${u.username} (uid=${u.piUid})`);
@@ -100,8 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Logout ───────────────────────────────────────────────────────────────────
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    // localStorage.removeItem(TOKEN_KEY);
+    // localStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
     logger.info('Logged out');

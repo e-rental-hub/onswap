@@ -10,17 +10,25 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
-apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('pi_p2p_token');
-      if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
-    }
-    logger.debug(`→ ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => { logger.error('Request error:', error); return Promise.reject(error); }
-);
+export const setAuthToken = (token: string) => {
+  if (token) {
+    return (apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`);
+  } else {
+    return delete apiClient.defaults.headers.common['Authorization'];
+  }
+};
+
+// apiClient.interceptors.request.use(
+//   (config: InternalAxiosRequestConfig) => {
+//     if (typeof window !== 'undefined') {
+//       const token = localStorage.getItem('pi_p2p_token');
+//       if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
+//     }
+//     logger.debug(`→ ${config.method?.toUpperCase()} ${config.url}`);
+//     return config;
+//   },
+//   (error) => { logger.error('Request error:', error); return Promise.reject(error); }
+// );
 
 apiClient.interceptors.response.use(
   (response) => { logger.debug(`← ${response.status} ${response.config.url}`); return response; },
