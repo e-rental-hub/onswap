@@ -1,7 +1,17 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { WalletCard } from '@/components/p2p/WalletCard';
+import { PAYMENT_METHOD_LABELS, PaymentMethodDetail, WalletSummary } from '@/types';
+import { useToast } from '@/hooks/useToast';
+import { logger } from '@/lib/logger';
+import { walletApi } from '@/lib/api';
+import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
+import PaymentAccountPicker from '@/components/p2p/paymentAccountPicker';
+import BottomNav from '@/components/layout/BottomNav';
+import PiWalletPicker from '@/components/p2p/PiWalletAddressPicker';
 
 // ── mock user – replace with your auth context ──────────────────────────────
 const MOCK_USER = {
@@ -26,6 +36,7 @@ type MenuItem = {
   icon: React.ReactNode;
   label: string;
   sublabel?: string;
+  name?: string;
   href?: string;
   onClick?: () => void;
   badge?: string;
@@ -68,7 +79,7 @@ const Icon = {
   ),
   help: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><dot cx="12" cy="17" r="1" /><circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="none" /><circle cx="12" cy="17" r="0.5" fill="currentColor" stroke="none" />
     </svg>
   ),
   terms: (
@@ -156,53 +167,56 @@ function LogoutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
 export default function ProfilePage() {
   const router = useRouter();
   const [showLogout, setShowLogout] = useState(false);
-  const u = MOCK_USER;
+  const { user, logout, isAuthenticated } = useAuth();
+  const { showToast } = useToast();
 
-  const handleLogout = () => {
-    // call your auth logout here
-    router.push('/login');
-  };
+  const [wallet,      setWallet]      = useState<WalletSummary | null>(null);
+  const [selectedSellerAccount, setSelectedSellerAccount] = useState<PaymentMethodDetail | null>(null);
+  const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
+
+  const u = {
+    displayName: user?.displayName || user?.username,
+    username: `@${user?.username}`,
+    piUid: user?.piUid,
+    avatarInitials: user?.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase(),
+    completedTrades: user?.completedTrades ?? 0,
+    rating: user?.rating ?? 0,
+    memberSince: user ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '',
+    verifiedKyc: user?.kycVerified ?? false,
+    piBalance: user?.piBalance ?? 0,
+    preferredCurrency: CURRENCIES.find(c => c.code === user?.preferredCurrency)?.label || 'Set your currency',
+  }
+
+  // ── Loaders ──────────────────────────────────────────────────────────────── 
+  const loadWallet = useCallback(async () => {
+    try {
+      const r = await walletApi.getBalance();
+      setWallet(r.data);
+    } catch (e) { logger.error('loadWallet error:', e); }
+  }, []);
+
+  useEffect(() => {
+    loadWallet();
+  }, [loadWallet]);
 
   const sections: MenuSection[] = [
     {
       title: 'Account',
       items: [
         {
-          icon: Icon.user, label: 'Account Details',
-          sublabel: 'Name, phone, bank info',
-          href: '/profile/account', chevron: true,
-        },
-        {
-          icon: Icon.switch, label: 'Pi Wallet Picker',
-          sublabel: 'Switch your connected Pi wallet',
-          href: '/profile/wallet-picker', chevron: true,
-        },
-        {
-          icon: Icon.deposit, label: 'Deposit Pi',
-          sublabel: 'Add Pi to your escrow balance',
-          href: '/profile/deposit', chevron: true,
-          badge: 'New',
-        },
-        {
-          icon: Icon.wallet, label: 'Payment Methods',
-          sublabel: 'Bank accounts & mobile money',
-          href: '/profile/payment-methods', chevron: true,
+          icon: Icon.user, label: 'Preferred Currency',
+          sublabel: CURRENCIES.find(c => c.code === user?.preferredCurrency)?.label || 'Set your currency',
+          name: 'account-details', chevron: true,
         },
       ],
     },
     {
-      title: 'Security',
+      title: 'Info',
       items: [
-        {
-          icon: Icon.shield, label: 'KYC & Verification',
-          sublabel: u.verifiedKyc ? 'Fully verified' : 'Complete your identity check',
-          href: '/profile/kyc', chevron: true,
-          badge: u.verifiedKyc ? '✓ Verified' : 'Pending',
-        },
         {
           icon: Icon.bell, label: 'Notifications',
           sublabel: 'Trade alerts, promotions',
-          href: '/profile/notifications', chevron: true,
+          href: '#', chevron: true,
         },
       ],
     },
@@ -212,11 +226,11 @@ export default function ProfilePage() {
         {
           icon: Icon.help, label: 'Help & FAQ',
           sublabel: 'How P2P trading works',
-          href: '/help', chevron: true,
+          href: '#', chevron: true,
         },
         {
           icon: Icon.terms, label: 'Terms & Privacy',
-          href: '/terms', chevron: true,
+          href: '#', chevron: true,
         },
         {
           icon: Icon.logout, label: 'Log Out',
@@ -227,6 +241,10 @@ export default function ProfilePage() {
     },
   ];
 
+  if (!isAuthenticated || !user) {
+    return router.push('/auth/login');
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '88px' }}>
 
@@ -235,7 +253,9 @@ export default function ProfilePage() {
         position: 'relative', overflow: 'hidden',
         background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%)',
         borderBottom: '1px solid var(--border)',
-        padding: '48px 24px 32px',
+        padding: '16px',
+        maxWidth: '700px',
+        margin: '0 auto'
       }}>
         {/* decorative orb */}
         <div style={{
@@ -305,51 +325,66 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-
-        {/* Pi balance strip */}
-        <div style={{
-          marginTop: '24px',
-          padding: '16px 20px',
-          borderRadius: '16px',
-          background: 'linear-gradient(135deg, rgba(244,160,23,0.12) 0%, rgba(244,160,23,0.05) 100%)',
-          border: '1px solid rgba(244,160,23,0.25)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <div>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Escrow Balance
-            </p>
-            <p style={{
-              fontSize: '26px', fontWeight: 800, color: '#f4a017', margin: 0,
-              fontFamily: 'var(--font-display, Georgia, serif)',
-            }}>
-              π {u.piBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-          <Link href="/profile/deposit" style={{
-            padding: '10px 18px', borderRadius: '12px',
-            background: 'rgba(244,160,23,0.2)', border: '1px solid rgba(244,160,23,0.4)',
-            color: '#f4a017', fontWeight: 700, fontSize: '13px', textDecoration: 'none',
-            display: 'flex', alignItems: 'center', gap: '6px',
-            transition: 'background 0.15s',
-          }}>
-            {Icon.deposit} Deposit
-          </Link>
-        </div>
+              
+        {/* Wallet strip */}
+        <WalletCard
+          summary={wallet}
+          accessToken={user?.piUid ?? null}
+          onDeposited={(bal) =>
+            setWallet((w) =>
+              w ? { ...w, piBalance: bal, totalHeld: bal + (w.lockedBalance ?? 0) } : w,
+            )
+          }
+          showToast={showToast}
+        />
       </div>
 
       {/* ── menu sections ─────────────────────────────────────────── */}
-      <div style={{ padding: '16px', maxWidth: '640px', margin: '0 auto' }}>
-        {sections.map((section) => (
-          <div key={section.title} style={{ marginBottom: '24px' }}>
-            <p style={{
+      <div className='flex-col space-y-4'  style={{ padding: '16px', maxWidth: '640px', margin: '0 auto' }}>
+        <p style={{
               fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em',
               textTransform: 'uppercase', color: 'var(--text-muted)',
               padding: '0 4px', marginBottom: '8px',
             }}>
-              {section.title}
+              Account
             </p>
+        <PaymentAccountPicker
+          selectedPaymentAccount={selectedSellerAccount}
+          setSelectedPaymentAccount={setSelectedSellerAccount}
+          label="Your Payment Account"
+          hint="Buyers will pay to this account"
+          required
+        />
 
+        {/* Payment methods */}
+        <div className="mt-5">
+          <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
+            PAYMENT METHODS
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {ALL_PAYMENT_TYPES.map((pm) => (
+              <span
+                key={pm}
+                className="text-xs px-3 py-1.5 rounded-lg border"
+                style={{
+                  background:  'rgba(240,160,60,0.07)',
+                  color:       'var(--text-secondary)',
+                  borderColor: 'rgba(240,160,60,0.15)',
+                }}
+              >
+                {PAYMENT_METHOD_LABELS[pm]}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <PiWalletPicker
+          selectedPiWalletId={selectedPiWalletId}
+          setSelectedPiWalletId={setSelectedPiWalletId}
+        />
+
+        {sections.map((section) => (
+          <div key={section.title} style={{ marginBottom: '24px' }}>
             <div style={{
               borderRadius: '18px',
               border: '1px solid var(--border)',
@@ -455,10 +490,11 @@ export default function ProfilePage() {
       {/* ── logout confirm modal ───────────────────────────────────── */}
       {showLogout && (
         <LogoutModal
-          onConfirm={handleLogout}
+          onConfirm={logout}
           onCancel={() => setShowLogout(false)}
         />
       )}
+      <BottomNav />
     </div>
   );
 }

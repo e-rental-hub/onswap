@@ -15,6 +15,7 @@ import {
 import { logger }   from '@/lib/logger';
 import { useToast } from '@/hooks/useToast';
 import { ALL_PAYMENT_TYPES } from '@/lib/constants';
+import BottomNav from '@/components/layout/BottomNav';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -977,6 +978,7 @@ export default function PostAdPage() {
           showToast={showToast}
         />
       )}
+      <BottomNav />
     </div>
   );
 }

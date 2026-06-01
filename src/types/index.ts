@@ -112,6 +112,7 @@ export interface User {
   userAccountDetails:     PaymentMethodDetail[];
   piWalletAddresses:  PiWalletAddress[];
   createdAt:          string;
+  preferredCurrency: CurrencyEnum;
 }
 
 // ─── Ads ──────────────────────────────────────────────────────────────────────

@@ -54,6 +54,10 @@ function WalletRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+
+  const shortAddress =
+  `${wallet.address.slice(0, 6)}...${wallet.address.slice(-6)}`;
+
   return (
     <button
       type="button"
@@ -101,7 +105,7 @@ function WalletRow({
             className="text-xs mt-0.5 truncate"
             style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
           >
-            {wallet.address}
+            {shortAddress}
           </p>
         </div>
       </div>
@@ -120,6 +124,8 @@ const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWalletId, selectedPiWall
   const [savingWallet,   setSavingWallet]   = useState(false);
   const [savedWallets,   setSavedWallets]   = useState<PiWalletAddress[]>([]);
   const [loadingWallets, setLoadingWallets] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [step, setStep] = useState<'list' | 'new'>('list');
 
   // ── Fetch saved wallets ────────────────────────────────────────────────────
   const fetchSavedWallets = useCallback(async () => {
@@ -162,8 +168,11 @@ const PiWalletPicker: React.FC<Props> = ({ setSelectedPiWalletId, selectedPiWall
       const r       = await piWalletsApi.getAll();
       const updated = r.data.piWalletAddresses as PiWalletAddress[];
       setSavedWallets(updated);
-      const newest  = updated[updated.length - 1];
-      if (newest) setSelectedPiWalletId(newest._id);
+      const saved = ( payload.isDefault && updated.find(w => w.isDefault )) ||
+        updated.find( w => w.address === payload.address && w.tag === payload.tag ) ||
+        updated[updated.length - 1];
+
+      if (saved) setSelectedPiWalletId(saved._id);
       setNewWallet(BLANK_WALLET);
       setShowNewWallet(false);
       showToast('Wallet address saved and selected');

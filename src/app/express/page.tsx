@@ -608,8 +608,6 @@ export default function ExpressPage() {
           </div>
         )}
       </div>
-
-      <BottomNav />
     </div>
   );
 }

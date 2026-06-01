@@ -8,6 +8,7 @@ import { ordersApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Order, OrderStatus, PAYMENT_METHOD_LABELS } from '@/types';
 import { logger } from '@/lib/logger';
+import BottomNav from '@/components/layout/BottomNav';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'All' },
@@ -160,6 +161,7 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+      <BottomNav />
     </div>
   );
 }

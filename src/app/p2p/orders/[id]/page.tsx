@@ -273,7 +273,11 @@ export default function OrderDetailPage() {
                      order.escrow.status === 'refunded' ? 'Pi Refunded'         : 'Pending Lock'}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    π{order.escrow.piAmount.toFixed(4)} · {order.escrow.txId}
+                    π{order.escrow.piAmount.toFixed(4)} · 
+                    <br />
+                    <span className="break-all">
+                      {order.escrow.txId}
+                    </span>
                   </p>
                 </div>
                 <div className="text-right">
