@@ -4,7 +4,6 @@ import { AuthProvider } from '@/hooks/useAuth';
 import Script from 'next/script';
 import PiInit from '@/lib/PiInit';
 import { ThemeProvider } from '@/hooks/useTheme';
-import { CurrencyProvider } from '@/hooks/useCurrency';
 
 export const metadata: Metadata = {
   title: 'Pi P2P — Trade Pi Securely',
@@ -20,10 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         />
         <ThemeProvider>
-          <AuthProvider> 
-            <CurrencyProvider>         
-              {children}
-            </CurrencyProvider>
+          <AuthProvider>        
+            {children}
           </AuthProvider>
         </ThemeProvider>
         
