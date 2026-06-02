@@ -5,8 +5,8 @@ export const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
 ];
 
 export const CURRENCIES = [
-  { code: CurrencyEnum.NGN, symbol: '₦', flag: '🇳🇬', label: 'Nigerian Naira' },
-  { code: CurrencyEnum.KES, symbol: 'KSh', flag: '🇰🇪', label: 'Kenyan Shilling' },
+  { code: CurrencyEnum.NGN, symbol: '₦', flag: '🇳🇬', label: 'Naira' },
+  { code: CurrencyEnum.KES, symbol: 'KSh', flag: '🇰🇪', label: 'Ke Shilling' },
 //   { code: 'GHS', symbol: '₵', flag: '🇬🇭', label: 'Ghanaian Cedi' },
 //   { code: 'ZAR', symbol: 'R',  flag: '🇿🇦', label: 'South African Rand' },
 //   { code: 'USD', symbol: '$',  flag: '🇺🇸', label: 'US Dollar' },

@@ -11,12 +11,14 @@ import {
   Ad, AdPaymentDetail, PaymentMethodDetail, PaymentMethodType,
   PAYMENT_METHOD_LABELS, WalletSummary, PiWalletAddress,
   PaymentMethodEnum,
+  CurrencyEnum,
 } from '@/types';
 import { logger } from '@/lib/logger';
+import { CURRENCIES } from '@/lib/constants';
 
 // ─── State machine / input mode ───────────────────────────────────────────────
 type Step      = 'configure' | 'summary' | 'depositing' | 'done';
-type InputMode = 'pi' | 'ngn';
+type InputMode = 'pi' | CurrencyEnum;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -101,14 +103,18 @@ function WalletBalanceBadge({
 }
 
 /**
- * Shown in sell-ad summary: tells the Pi buyer exactly where to send Naira.
+ * Shown in sell-ad summary: tells the Pi buyer exactly where to send fiat.
  */
 function SellerPaymentCard({
   detail,
-  nairaAmount,
+  fiatAmount,
+  currencySymbol,
+  currencyLabel,
 }: {
-  detail:      AdPaymentDetail;
-  nairaAmount: number;
+  detail:         AdPaymentDetail;
+  fiatAmount:     number;
+  currencySymbol: string;
+  currencyLabel:  string;
 }) {
   return (
     <div
@@ -154,7 +160,9 @@ function SellerPaymentCard({
         style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-secondary)' }}
       >
         After placing the order, Pi will be locked in escrow. Transfer exactly{' '}
-        <strong style={{ color: 'var(--pi-gold)' }}>₦{nairaAmount.toLocaleString()}</strong>{' '}
+        <strong style={{ color: 'var(--pi-gold)' }}>
+          {currencySymbol}{fiatAmount.toLocaleString()}
+        </strong>{' '}
         and then click "I've Paid".
       </p>
     </div>
@@ -163,9 +171,15 @@ function SellerPaymentCard({
 
 /**
  * Shown in buy-ad summary: confirms to the Pi seller which account
- * the ad creator (buyer) will send Naira to.
+ * the ad creator (buyer) will send fiat to.
  */
-function SellerAccountConfirmCard({ account }: { account: PaymentMethodDetail }) {
+function SellerAccountConfirmCard({
+  account,
+  currencyLabel,
+}: {
+  account:       PaymentMethodDetail;
+  currencyLabel: string;
+}) {
   return (
     <div
       className="rounded-xl p-4 mb-5"
@@ -212,8 +226,8 @@ function SellerAccountConfirmCard({ account }: { account: PaymentMethodDetail })
         style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-secondary)' }}
       >
         The ad creator will send{' '}
-        <strong style={{ color: 'var(--pi-gold)' }}>Naira</strong> to this account after you
-        lock Pi in escrow. Ensure these details are correct before confirming.
+        <strong style={{ color: 'var(--pi-gold)' }}>{currencyLabel}</strong> to this account after
+        you lock Pi in escrow. Ensure these details are correct before confirming.
       </p>
     </div>
   );
@@ -222,12 +236,14 @@ function SellerAccountConfirmCard({ account }: { account: PaymentMethodDetail })
 /** Shown in buy-ad summary: warns Pi seller their Pi will be locked. */
 function EscrowLockNotice({
   piAmount,
-  nairaAmount,
+  fiatAmount,
   balanceAfterLock,
+  currencySymbol,
 }: {
   piAmount:         number;
-  nairaAmount:      number;
+  fiatAmount:       number;
   balanceAfterLock: number;
+  currencySymbol:   string;
 }) {
   return (
     <div
@@ -239,7 +255,7 @@ function EscrowLockNotice({
       </p>
       <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
         π{piAmount.toFixed(4)} will be locked from your wallet balance while waiting
-        for the buyer to send ₦{nairaAmount.toLocaleString()}.
+        for the buyer to send {currencySymbol}{fiatAmount.toLocaleString()}.
       </p>
       <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
         Wallet balance after lock: π{balanceAfterLock.toFixed(4)}
@@ -253,7 +269,13 @@ function EscrowLockNotice({
 export default function AdDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
-  const { user, isAuthenticated, isDevMode } = useAuth();
+  const { user, preferredCurrency, isAuthenticated, isDevMode } = useAuth();
+
+  // Resolved currency helpers — single source of truth throughout the page
+  const adCurrency = CURRENCIES.find((c) => c.code === ad?.currency);
+  const currencySymbol = adCurrency ? adCurrency.symbol : preferredCurrency.symbol;
+  const currencyCode   = adCurrency ? adCurrency.code : preferredCurrency.code;
+  const currencyLabel  = adCurrency ? adCurrency.label : preferredCurrency.label;
 
   const [ad,             setAd]             = useState<Ad | null>(null);
   const [loading,        setLoading]        = useState(true);
@@ -266,20 +288,13 @@ export default function AdDetailPage() {
   const [error,          setError]          = useState('');
 
   // ── sell-ad viewer (buyer): which payment method type they'll use ──────────
-  // The buyer pays to the ad creator's pre-set accounts, so only a type chip
-  // selection is needed — not their own account details.
   const [selectedPm, setSelectedPm] = useState<PaymentMethodType>(PaymentMethodEnum.bankTransfer);
 
-  // ── buy-ad viewer (Pi seller): their own Naira receiving account ──────────
-  // The ad creator (buyer) will send Naira here.
+  // ── buy-ad viewer (Pi seller): their own fiat receiving account ───────────
   const [selectedSellerAccountDetail, setSelectedSellerAccountDetail] =
     useState<PaymentMethodDetail | null>(null);
 
   // ── Pi destination wallet (used by both flows) ────────────────────────────
-  // - sell-ad viewer: Pi buyer — Pi is released TO their wallet after paying.
-  // - buy-ad viewer:  Pi seller — Pi is released FROM escrow TO their wallet
-  //   after the buyer's Naira is confirmed.
-  // Shown in the summary step so configure stays uncluttered.
   const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
 
   // ── Load ad ─────────────────────────────────────────────────────────────────
@@ -306,8 +321,6 @@ export default function AdDetailPage() {
     } catch (e) {
       logger.error('fetchWallet error:', e);
     } finally {
-      // Always mark loaded so a null wallet doesn't prematurely
-      // trigger the deposit modal in handleProceed.
       setWalletLoaded(true);
     }
   }, [isAuthenticated]);
@@ -317,10 +330,10 @@ export default function AdDetailPage() {
   // ── Derived amounts ──────────────────────────────────────────────────────────
   const pricePerPi   = ad?.pricePerPi ?? 0;
   const rawNum       = parseFloat(rawInput) || 0;
-  const piAmount     = inputMode === 'pi'  ? rawNum : rawNum / pricePerPi;
-  const nairaAmount  = inputMode === 'ngn' ? rawNum : rawNum * pricePerPi;
+  const piAmount     = inputMode === 'pi'        ? rawNum : rawNum / pricePerPi;
+  const fiatAmount   = inputMode === currencyCode ? rawNum : rawNum * pricePerPi;
   const piRounded    = Math.floor(piAmount  * 10000) / 10000;
-  const nairaRounded = Math.round(nairaAmount * 100)  / 100;
+  const fiatRounded  = Math.round(fiatAmount * 100)  / 100;
 
   // ── Validation ───────────────────────────────────────────────────────────────
   function validate(): string {
@@ -329,26 +342,18 @@ export default function AdDetailPage() {
     if (piRounded <= 0)   return 'Enter an amount';
     if (piRounded > ad.availableAmount)
       return `Only ${ad.availableAmount}π available`;
-    if (nairaRounded < ad.minLimit)
-      return `Minimum is ₦${ad.minLimit.toLocaleString()}`;
-    if (nairaRounded > ad.maxLimit)
-      return `Maximum is ₦${ad.maxLimit.toLocaleString()}`;
-    // sell-ad viewer (buyer): must choose a payment method type
+    if (fiatRounded < ad.minLimit)
+      return `Minimum is ${currencySymbol}${ad.minLimit.toLocaleString()}`;
+    if (fiatRounded > ad.maxLimit)
+      return `Maximum is ${currencySymbol}${ad.maxLimit.toLocaleString()}`;
     if (ad.type === 'sell' && !selectedPm)
       return 'Choose a payment method';
-    // buy-ad viewer (Pi seller): must pick a Naira receiving account
     if (ad.type === 'sell' && !selectedPiWalletId)
       return 'Select a wallet to receive Pi';
     if (ad.type === 'buy' && !selectedSellerAccountDetail)
-      return 'Select a payment account to receive Naira';      
+      return `Select a payment account to receive ${currencyLabel}`;
     return '';
   }
-
-  // Pi wallet required at order creation for both flows.
-  // function validatePiWallet(): string {
-  //   if (isSellAd && !selectedPiWalletId) return 'Select or add a Pi wallet address to receive Pi';
-  //   return '';
-  // }
 
   const validationError = validate();
 
@@ -363,8 +368,6 @@ export default function AdDetailPage() {
     if (err) { setError(err); return; }
     setError('');
 
-    // buy-ad: viewer is Pi seller — they must have sufficient in-app balance.
-    // Guard against acting on a null wallet while it's still loading.
     if (ad!.type === 'buy') {
       if (!walletLoaded) {
         setError('Checking your wallet balance…');
@@ -384,21 +387,15 @@ export default function AdDetailPage() {
     const err = validate();
     if (err) { setError(err); return; }
 
-    // const walletErr = validatePiWallet();
-    // if (walletErr) { setError(walletErr); return; }
-
     setCreating(true);
     setError('');
     try {
       const res = await ordersApi.createOrder({
         adId:          id,
         piAmount:      piRounded,
-        // For buy-ads use the selected account's type; for sell-ads use the chosen chip.
         paymentMethod: selectedPm,
-        // buy-ad only: the Pi seller's Naira receiving account details.
         sellerAccountDetailId: isBuyAd ? selectedSellerAccountDetail?._id : undefined,
-        // Pi is released to this wallet on trade completion.
-        buyerWalletAddressId: isSellAd ? selectedPiWalletId as string : undefined,
+        buyerWalletAddressId:  isSellAd ? selectedPiWalletId as string  : undefined,
       });
       setStep('done');
       logger.info(`Order created: ${res.data.order._id}`);
@@ -450,15 +447,14 @@ export default function AdDetailPage() {
     </div>
   );
 
-  const isBuyAd  = ad.type === 'buy';   // ad creator wants to buy Pi  → viewer sells Pi
-  const isSellAd = ad.type === 'sell';  // ad creator wants to sell Pi → viewer buys Pi
+  const isBuyAd  = ad.type === 'buy';
+  const isSellAd = ad.type === 'sell';
 
-  const actionLabel = isBuyAd ? 'Sell Pi'    : 'Buy Pi';
-  const ctaColor    = isBuyAd ? 'btn-sell'   : 'btn-buy';
-  const accentColor = isBuyAd ? '#f87171'    : '#4ade80';
+  const actionLabel = isBuyAd ? 'Sell Pi'  : 'Buy Pi';
+  const ctaColor    = isBuyAd ? 'btn-sell' : 'btn-buy';
+  const accentColor = isBuyAd ? '#f87171'  : '#4ade80';
   const badgeClass  = isBuyAd ? 'badge-buy' : 'badge-sell';
 
-  // sell-ad summary: the ad creator's payment detail that matches the viewer's choice
   const matchedDetail: AdPaymentDetail | undefined = isSellAd
     ? ad.sellerAccountDetail
     : selectedSellerAccountDetail as PaymentMethodDetail;
@@ -467,7 +463,6 @@ export default function AdDetailPage() {
   const piShortfall      = Math.max(0, piRounded - (wallet?.piBalance ?? 0));
   const suggestedDeposit = Math.ceil((piShortfall / (1 - 0.01)) * 10000) / 10000;
 
-  // Label shown in the summary table's "Payment" row
   const summaryPaymentLabel = isBuyAd && selectedSellerAccountDetail
     ? PAYMENT_METHOD_LABELS[selectedSellerAccountDetail.type]
     : (PAYMENT_METHOD_LABELS[selectedPm as PaymentMethodType] ?? '—');
@@ -476,7 +471,7 @@ export default function AdDetailPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      {/* ── Deposit modal (buy-ad, insufficient balance) ──────────────────── */}
+      {/* ── Deposit modal ────────────────────────────────────────────────── */}
       {step === 'depositing' && (
         <DepositModal
           accessToken={user?.piUid ?? null}
@@ -484,7 +479,6 @@ export default function AdDetailPage() {
           onDepositComplete={(newBal) => {
             setWallet((w) => w ? { ...w, piBalance: newBal } : w);
             if (newBal >= piRounded) setStep('summary');
-            // Still insufficient → modal stays open
           }}
           onClose={() => setStep('configure')}
           showToast={(msg) => setError(msg)}
@@ -563,7 +557,7 @@ export default function AdDetailPage() {
                     className="text-4xl font-bold pi-text"
                     style={{ fontFamily: 'var(--font-display)' }}
                   >
-                    ₦{ad.pricePerPi.toLocaleString()}
+                    {currencySymbol}{ad.pricePerPi.toLocaleString()}
                   </span>
                   <span style={{ color: 'var(--text-muted)' }}>/π</span>
                 </div>
@@ -572,10 +566,10 @@ export default function AdDetailPage() {
               {/* Stats grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: 'Available',  value: `π${ad.availableAmount.toLocaleString()}`, color: 'var(--pi-gold)' },
-                  { label: 'Min (₦)',    value: `₦${ad.minLimit.toLocaleString()}`,         color: 'var(--text-primary)' },
-                  { label: 'Max (₦)',    value: `₦${ad.maxLimit.toLocaleString()}`,         color: 'var(--text-primary)' },
-                  { label: 'Pay Window', value: `${ad.paymentWindow} min`,                  color: 'var(--text-primary)' },
+                  { label: 'Available',                   value: `π${ad.availableAmount.toLocaleString()}`,                       color: 'var(--pi-gold)' },
+                  { label: `Min (${currencySymbol})`,     value: `${currencySymbol}${ad.minLimit.toLocaleString()}`,               color: 'var(--text-primary)' },
+                  { label: `Max (${currencySymbol})`,     value: `${currencySymbol}${ad.maxLimit.toLocaleString()}`,               color: 'var(--text-primary)' },
+                  { label: 'Pay Window',                  value: `${ad.paymentWindow} min`,                                        color: 'var(--text-primary)' },
                 ].map((s) => (
                   <div
                     key={s.label}
@@ -700,9 +694,6 @@ export default function AdDetailPage() {
 
               {/* ══════════════════════════════════════════════════════════
                   CONFIGURE STEP
-                  ─ sell-ad viewer (buyer): pick payment method type
-                  ─ buy-ad viewer (Pi seller): pick their Naira account
-                  Pi wallet is collected in the summary step (both flows).
               ══════════════════════════════════════════════════════════ */}
               {!isOwn && isAuthenticated && step === 'configure' && (
                 <>
@@ -720,7 +711,7 @@ export default function AdDetailPage() {
                     className="flex rounded-xl p-1 mb-4"
                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
                   >
-                    {(['pi', 'ngn'] as InputMode[]).map((mode) => (
+                    {(['pi', currencyCode] as InputMode[]).map((mode) => (
                       <button
                         key={mode}
                         type="button"
@@ -732,7 +723,7 @@ export default function AdDetailPage() {
                           border:     inputMode === mode ? '1px solid var(--border)' : '1px solid transparent',
                         }}
                       >
-                        {mode === 'pi' ? 'Enter π' : 'Enter ₦'}
+                        {mode === 'pi' ? 'Enter π' : `Enter ${currencySymbol}`}
                       </button>
                     ))}
                   </div>
@@ -741,7 +732,7 @@ export default function AdDetailPage() {
                   <div
                     className="flex items-center rounded-xl overflow-hidden"
                     style={{
-                      border: '1px solid var(--border)',
+                      border:     '1px solid var(--border)',
                       background: 'var(--bg-input)',
                     }}
                   >
@@ -753,7 +744,7 @@ export default function AdDetailPage() {
                           : 'var(--text-secondary)',
                       }}
                     >
-                      {inputMode === 'pi' ? 'π' : '₦'}
+                      {inputMode === 'pi' ? 'π' : currencySymbol}
                     </div>
 
                     <input
@@ -786,15 +777,15 @@ export default function AdDetailPage() {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span style={{ color: 'var(--text-muted)' }}>Naira amount</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{currencyLabel} amount</span>
                         <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                          ₦{nairaRounded.toLocaleString()}
+                          {currencySymbol}{fiatRounded.toLocaleString()}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span style={{ color: 'var(--text-muted)' }}>Rate</span>
                         <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                          ₦{pricePerPi.toLocaleString()}/π
+                          {currencySymbol}{pricePerPi.toLocaleString()}/π
                         </span>
                       </div>
                     </div>
@@ -802,7 +793,7 @@ export default function AdDetailPage() {
 
                   {/* Remaining / limits */}
                   <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                    {ad.availableAmount.toFixed(4)}π remaining · Limit ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
+                    {ad.availableAmount.toFixed(4)}π remaining · Limit {currencySymbol}{ad.minLimit.toLocaleString()}–{currencySymbol}{ad.maxLimit.toLocaleString()}
                   </p>
 
                   {/* sell-ad: buyer picks a payment method type */}
@@ -837,15 +828,14 @@ export default function AdDetailPage() {
                     </div>
                   )}
 
-                  {/* buy-ad: Pi seller picks their Naira receiving account */}
-                  {isBuyAd ?
-                  (
+                  {/* buy-ad: Pi seller picks their fiat receiving account */}
+                  {isBuyAd ? (
                     <div className="mb-5">
                       <PaymentAccountPicker
                         selectedPaymentAccount={selectedSellerAccountDetail}
                         setSelectedPaymentAccount={setSelectedSellerAccountDetail}
-                        label="Your Naira Receiving Account"
-                        hint="Buyer sends Naira here"
+                        label={`Your ${currencyLabel} Receiving Account`}
+                        hint={`Buyer sends ${currencyLabel} here`}
                         required
                       />
                     </div>
@@ -858,7 +848,7 @@ export default function AdDetailPage() {
                     </div>
                   )}
 
-                  {/* buy-ad: balance check (shown only after wallet has loaded) */}
+                  {/* buy-ad: balance check */}
                   {isBuyAd && (
                     <WalletBalanceBadge
                       wallet={walletLoaded ? wallet : null}
@@ -885,10 +875,6 @@ export default function AdDetailPage() {
 
               {/* ══════════════════════════════════════════════════════════
                   SUMMARY STEP
-                  ─ Review amounts
-                  ─ sell-ad: show seller account to pay, collect Pi wallet
-                  ─ buy-ad: confirm Pi seller's account, escrow notice,
-                             collect Pi wallet
               ══════════════════════════════════════════════════════════ */}
               {!isOwn && isAuthenticated && step === 'summary' && (
                 <>
@@ -915,29 +901,38 @@ export default function AdDetailPage() {
                     className="rounded-xl overflow-hidden mb-5"
                     style={{ border: '1px solid var(--border)' }}
                   >
-                    <SummaryRow label="Pi Amount"    value={`π${piRounded.toFixed(4)}`}         mono highlight />
-                    <SummaryRow label="Naira Amount" value={`₦${nairaRounded.toLocaleString()}`} mono />
-                    <SummaryRow label="Rate"         value={`₦${pricePerPi.toLocaleString()}/π`} />
-                    <SummaryRow label="Payment"      value={summaryPaymentLabel} />
-                    <SummaryRow label="Pay Window"   value={`${ad.paymentWindow} min`}           last />
+                    <SummaryRow label="Pi Amount"                  value={`π${piRounded.toFixed(4)}`}                              mono highlight />
+                    <SummaryRow label={`${currencyLabel} Amount`}  value={`${currencySymbol}${fiatRounded.toLocaleString()}`}       mono />
+                    <SummaryRow label="Rate"                       value={`${currencySymbol}${pricePerPi.toLocaleString()}/π`} />
+                    <SummaryRow label="Payment"                    value={summaryPaymentLabel} />
+                    <SummaryRow label="Pay Window"                 value={`${ad.paymentWindow} min`}                                last />
                   </div>
 
-                  {/* sell-ad: where the Pi buyer sends Naira */}
+                  {/* sell-ad: where the Pi buyer sends fiat */}
                   {isSellAd && matchedDetail && (
-                    <SellerPaymentCard detail={matchedDetail} nairaAmount={nairaRounded} />
+                    <SellerPaymentCard
+                      detail={matchedDetail}
+                      fiatAmount={fiatRounded}
+                      currencySymbol={currencySymbol}
+                      currencyLabel={currencyLabel}
+                    />
                   )}
 
-                  {/* buy-ad: confirm the Pi seller's Naira account */}
+                  {/* buy-ad: confirm the Pi seller's fiat account */}
                   {isBuyAd && selectedSellerAccountDetail && (
-                    <SellerAccountConfirmCard account={selectedSellerAccountDetail} />
+                    <SellerAccountConfirmCard
+                      account={selectedSellerAccountDetail}
+                      currencyLabel={currencyLabel}
+                    />
                   )}
 
                   {/* buy-ad: escrow lock warning */}
                   {isBuyAd && (
                     <EscrowLockNotice
                       piAmount={piRounded}
-                      nairaAmount={nairaRounded}
+                      fiatAmount={fiatRounded}
                       balanceAfterLock={(wallet?.piBalance ?? 0) - piRounded}
+                      currencySymbol={currencySymbol}
                     />
                   )}
 

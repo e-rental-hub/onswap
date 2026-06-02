@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import BottomNav from '@/components/layout/BottomNav';
 import { CURRENCIES, MarketMode, PAYMENT_OPTIONS } from '@/lib/constants';
 import { CurrencyModal } from '@/components/CurrencyModal';
+import { useAuth } from '@/hooks/useAuth';
 
 // ── Mode Switcher ─────────────────────────────────────────────────────────────
 function ModeSwitcher({ mode, onChange }: { mode: MarketMode; onChange: (m: MarketMode) => void }) {
@@ -256,6 +257,8 @@ function ExpressPanel({ currency }: { currency: typeof CURRENCIES[0] }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function P2PMarketPage() {
+  const {preferredCurrency} = useAuth()
+  
   const [mode, setMode] = useState<MarketMode>('p2p');
   const [tab, setTab] = useState<AdType>('buy');
   const [ads, setAds] = useState<Ad[]>([]);
@@ -263,7 +266,7 @@ export default function P2PMarketPage() {
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethodType | ''>('');
   const [amountFilter, setAmountFilter] = useState('');
   const [total, setTotal] = useState(0);
-  const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(CurrencyEnum.NGN);
+  const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(preferredCurrency.code);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
   const currency = CURRENCIES.find((c) => c.code === currencyCode) ?? CURRENCIES[0];

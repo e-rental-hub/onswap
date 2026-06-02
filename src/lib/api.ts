@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { logger } from './logger';
-import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType } from '@/types';
+import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType, CurrencyEnum } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -55,6 +55,8 @@ export const authApi = {
   getMe:         () => apiClient.get('/auth/me'),
   updateProfile: (data: { displayName?: string; phone?: string }) =>
     apiClient.patch('/auth/profile', data),
+  setCurrency: (data: {selectedCurrency: CurrencyEnum}) => 
+    apiClient.post('/auth/set-currency', data)
 };
 
 // ─── Saved account details ────────────────────────────────────────────────────

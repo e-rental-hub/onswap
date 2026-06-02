@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Order, OrderStatus, PAYMENT_METHOD_LABELS } from '@/types';
 import { logger } from '@/lib/logger';
 import BottomNav from '@/components/layout/BottomNav';
+import { CURRENCIES } from '@/lib/constants';
 
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'All' },
@@ -138,7 +139,10 @@ export default function OrdersPage() {
                           <OrderStatusBadge status={order.status as OrderStatus} />
                         </div>
                         <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          <span>₦{order.nairaAmount.toLocaleString()}</span>
+                          <span>
+                            {CURRENCIES.find((c) => c.code === order?.currency)?.symbol}
+                            {order.nairaAmount.toLocaleString()}
+                          </span>
                           <span>·</span>
                           <span>{PAYMENT_METHOD_LABELS[order.paymentMethod]}</span>
                           <span>·</span>

@@ -1,5 +1,7 @@
-import { useCurrency } from "@/hooks/useCurrency";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/useToast";
 import { CURRENCIES } from "@/lib/constants";
+import { logger } from "@/lib/logger";
 import { CurrencyEnum } from "@/types";
 
 // ── Currency Picker Modal ─────────────────────────────────────────────────────
@@ -8,11 +10,33 @@ export function CurrencyModal({
   onSelect,
   onClose,
 }: {
-  selected: string;
+  selected: CurrencyEnum;
   onSelect: (code: CurrencyEnum) => void;
   onClose: () => void;
 }) {
-  const {currency, setCode} = useCurrency()
+  const { setUserCurrency, setPreferredCurrency } = useAuth();
+  const { showToast } = useToast();
+
+  // ── Save selected Currency ─────────────────────────────────────────────────────────
+  const handleSaveCurrency = async (currency: CurrencyEnum) => {
+    if (!currency) {
+      return;
+    }
+    
+    try {
+      await setUserCurrency(currency);
+      showToast('selected currency saved as default')
+    } catch (e) {
+      showToast('Failed to save selected currency', true);
+      logger.error('error changing currency:', e);
+    } finally {
+      const selectedCurrency = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
+      setPreferredCurrency(selectedCurrency);
+      onSelect(currency)
+      onClose();
+    }
+  };
+
   return (
     <div
       onClick={onClose}
@@ -44,7 +68,7 @@ export function CurrencyModal({
             return (
               <button
                 key={c.code}
-                onClick={() => { onSelect(c.code); setCode(c.code); onClose(); }}
+                onClick={()=>handleSaveCurrency(c.code)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '14px',
                   padding: '14px 16px', borderRadius: '14px', cursor: 'pointer',

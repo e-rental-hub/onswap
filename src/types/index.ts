@@ -137,7 +137,7 @@ export interface Ad {
   minLimit:        number;
   maxLimit:        number;
   pricePerPi:      number;
-  currency:        string;
+  currency:        CurrencyEnum;
   paymentMethods:  PaymentMethodType[];
   sellerAccountDetail?:  AdPaymentDetail;
   paymentWindow:   number;
@@ -194,7 +194,7 @@ export interface Order {
   piAmount:       number;
   nairaAmount:    number;
   pricePerPi:     number;
-  currency:       string;
+  currency:       CurrencyEnum;
   paymentMethod:  PaymentMethodType;
   sellerAccountDetail: AdPaymentDetail;
   buyerWalletAddress: string

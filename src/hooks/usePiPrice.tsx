@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useCurrency } from './useCurrency';
+import { useAuth } from './useAuth';
 
 // ── Spread config ─────────────────────────────────────────────────────────────
 // Express buy:  platform charges +2% above market (user pays more)
@@ -43,7 +43,7 @@ const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 const cache: Map<string, { price: PiPrice; ts: number }> = new Map();
 
 export function usePiPrice(): PiPrice {
-  const { currency } = useCurrency();
+  const { preferredCurrency } = useAuth();
   const [price, setPrice] = useState<PiPrice>({
     usdPrice: 0, fiatPrice: 0, buyPrice: 0, sellPrice: 0,
     change24h: 0, lastUpdated: 0, loading: true, error: null,
@@ -51,7 +51,7 @@ export function usePiPrice(): PiPrice {
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchPrice = useCallback(async () => {
-    const code      = currency.code;
+    const code      =   preferredCurrency.code;
     const cacheKey  = `pi_${code}`;
     const cached    = cache.get(cacheKey);
 
@@ -117,7 +117,7 @@ export function usePiPrice(): PiPrice {
         error: 'Live rate unavailable — using estimated rate',
       });
     }
-  }, [currency.code]);
+  }, [preferredCurrency.code]);
 
   useEffect(() => {
     fetchPrice();
