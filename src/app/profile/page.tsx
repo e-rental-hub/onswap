@@ -346,6 +346,7 @@ export default function ProfilePage() {
         <PaymentAccountPicker
           selectedPaymentAccount={selectedSellerAccount}
           setSelectedPaymentAccount={setSelectedSellerAccount}
+          isEditMode={true}
           label="Your Payment Account"
           hint="Buyers will pay to this account"
           required
@@ -376,6 +377,7 @@ export default function ProfilePage() {
         <PiWalletPicker
           selectedPiWalletId={selectedPiWalletId}
           setSelectedPiWalletId={setSelectedPiWalletId}
+          isEditMode={true}
         />
 
         {/* Currency picker button */}
