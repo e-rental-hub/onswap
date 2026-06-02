@@ -3,13 +3,13 @@ import {
   createContext,
   useContext,
   useState,
-  useEffect,
   useCallback,
   ReactNode,
 } from 'react';
-import { authApi, paymentMethodsApi, piWalletsApi } from '@/lib/api';
+import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress } from '@/types';
+import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress, CurrencyEnum } from '@/types';
+import { CURRENCIES } from '@/lib/constants';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -19,6 +19,7 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   isDevMode: boolean;
+  preferredCurrency: (typeof CURRENCIES)[number];
 
   /** Called by PiAuthButton after a successful Pi.authenticate() */
   loginWithPi: (
@@ -41,11 +42,13 @@ interface AuthContextType {
   updatePiWalletAddress: (waId: string, data: Partial<Pick<NewPiWalletAddress, 'tag' | 'isDefault'>>) => Promise<void>;
   removePiWalletAddress: (waId: string) => Promise<void>;
   setDefaultPiWalletAddress: (waId: string) => Promise<void>;
+  setUserCurrency: (selectedCurrency: CurrencyEnum) =>Promise<void>;
+  setPreferredCurrency: (currency: (typeof CURRENCIES)[number]) => void;
 }
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
-const TOKEN_KEY = 'pi_p2p_token';
+// const TOKEN_KEY = 'pi_p2p_token';
 const USER_KEY = 'pi_p2p_user';
 const isDevMode = process.env.NODE_ENV === "development"
 
@@ -57,24 +60,25 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [preferredCurrency, setPreferredCurrency] = useState<(typeof CURRENCIES)[number]>(CURRENCIES[0]);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Restore session from localStorage on mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
-    const storedUser = localStorage.getItem(USER_KEY);
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        logger.warn('Corrupt stored user — clearing');
-        localStorage.removeItem(USER_KEY);
-      }
-    }
-    setLoading(false);
-  }, []);
+  // useEffect(() => {
+  //   const storedToken = localStorage.getItem(TOKEN_KEY);
+  //   const storedUser = localStorage.getItem(USER_KEY);
+  //   if (storedToken && storedUser) {
+  //     setToken(storedToken);
+  //     try {
+  //       setUser(JSON.parse(storedUser));
+  //     } catch {
+  //       logger.warn('Corrupt stored user — clearing');
+  //       localStorage.removeItem(USER_KEY);
+  //     }
+  //   }
+  //   setLoading(false);
+  // }, []);
 
   // ── Pi login / register ──────────────────────────────────────────────────────
 
@@ -88,10 +92,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authApi.piAuth({ accessToken, uid, username, displayName });
       const { token: t, user: u } = res.data as { token: string; user: User };
 
-      localStorage.setItem(TOKEN_KEY, t);
-      localStorage.setItem(USER_KEY, JSON.stringify(u));
+      // localStorage.setItem(TOKEN_KEY, t);
+      // localStorage.setItem(USER_KEY, JSON.stringify(u));
+      setAuthToken(t);
       setToken(t);
       setUser(u);
+      const userCurrency = CURRENCIES.find(
+        (c) => c.code === user?.preferredCurrency
+      ) || CURRENCIES[0];
+      setPreferredCurrency(userCurrency)
       logger.info(`Pi auth success: ${u.username} (uid=${u.piUid})`);
     },
     []
@@ -100,8 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Logout ───────────────────────────────────────────────────────────────────
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    // localStorage.removeItem(TOKEN_KEY);
+    // localStorage.removeItem(USER_KEY);
+    setAuthToken(null);
     setToken(null);
     setUser(null);
     logger.info('Logged out');
@@ -196,6 +206,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logger.info(`Default Pi wallet address set: ${waId}`);
   }, []);
 
+  // ── User Currency helpers ─────────────────────────────────────────────
+
+  const setUserCurrency = useCallback(async (selectedCurrency: CurrencyEnum) => {
+    const res = await authApi.setCurrency({currency: selectedCurrency});
+    const currency = res.data.currency;
+
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, preferredCurrency: currency };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+
+    const userCurrency = CURRENCIES.find(
+      (c) => c.code === currency
+    ) || CURRENCIES[0];
+      
+    setPreferredCurrency(userCurrency)
+  },[]);
+
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
@@ -206,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isAuthenticated: !!token,
         isDevMode,
+        preferredCurrency,
         loginWithPi,
         logout,
         refreshUser,
@@ -217,6 +248,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatePiWalletAddress,
         removePiWalletAddress,
         setDefaultPiWalletAddress,
+        setUserCurrency,
+        setPreferredCurrency,
       }}
     >
       {children}

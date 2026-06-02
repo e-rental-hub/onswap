@@ -6,6 +6,7 @@ import { ordersApi }   from '@/lib/api';
 import { useAuth }     from '@/hooks/useAuth';
 import { Order, OrderStatus, Message, PAYMENT_METHOD_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types';
 import { logger }      from '@/lib/logger';
+import { CURRENCIES } from '@/lib/constants';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ function StepRow({ n, label, done, active }: { n: number; label: string; done: b
 export default function OrderDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, preferredCurrency, isAuthenticated } = useAuth();
 
   const [order,         setOrder]         = useState<Order | null>(null);
   const [loading,       setLoading]       = useState(true);
@@ -53,6 +54,12 @@ export default function OrderDetailPage() {
   const [showDispute,   setShowDispute]   = useState(false);
   const [showCancel,    setShowCancel]    = useState(false);
   const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+
+  // Resolved currency helpers — single source of truth throughout the page
+  const orderCurrency = CURRENCIES.find((c) => c.code === order?.currency);
+  const currencySymbol = orderCurrency ? orderCurrency.symbol : preferredCurrency.symbol;
+  const currencyCode   = orderCurrency ? orderCurrency.code : preferredCurrency.code;
+  const currencyLabel  = orderCurrency ? orderCurrency.label : preferredCurrency.label;
 
   useEffect(() => { if (!isAuthenticated) router.push('/auth/login'); }, [isAuthenticated, router]);
 
@@ -211,8 +218,8 @@ export default function OrderDetailPage() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Pi Amount',    value: `π${order.piAmount.toLocaleString()}`,     mono: true,  highlight: true  },
-                  { label: 'Naira Amount', value: `₦${order.nairaAmount.toLocaleString()}`,  mono: true,  highlight: false },
-                  { label: 'Rate',         value: `₦${order.pricePerPi.toLocaleString()}/π`, mono: false, highlight: false },
+                  { label: `${currencyLabel} Amount`, value: `${currencySymbol}${order.nairaAmount.toLocaleString()}`,  mono: true,  highlight: false },
+                  { label: 'Rate',         value: `${currencySymbol}${order.pricePerPi.toLocaleString()}/π`, mono: false, highlight: false },
                   { label: 'Method',       value: PAYMENT_METHOD_LABELS[order.paymentMethod], mono: false, highlight: false },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl p-3"
@@ -286,7 +293,7 @@ export default function OrderDetailPage() {
                     π{order.escrow.piAmount.toFixed(4)}
                   </p>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    ≈ ₦{order.nairaAmount.toLocaleString()}
+                    ≈ {currencySymbol}{order.nairaAmount.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -321,7 +328,7 @@ export default function OrderDetailPage() {
                 <div className="rounded-xl p-4"
                   style={{ background: 'rgba(240,160,60,0.08)', border: '1px solid rgba(240,160,60,0.2)' }}>
                   <p className="text-sm" style={{ color: 'var(--pi-gold)' }}>
-                    Transfer exactly <strong>₦{order.nairaAmount.toLocaleString()}</strong> via{' '}
+                    Transfer exactly <strong>{currencySymbol}{order.nairaAmount.toLocaleString()}</strong> via{' '}
                     {PAYMENT_METHOD_LABELS[order.paymentMethod]}, then click "I've Paid".
                   </p>
                 </div>
@@ -579,7 +586,7 @@ export default function OrderDetailPage() {
                   Trade Complete!
                 </h3>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  π{order.piAmount} for ₦{order.nairaAmount.toLocaleString()}
+                  π{order.piAmount} for {currencySymbol}{order.nairaAmount.toLocaleString()}
                 </p>
                 {order.completedAt && (
                   <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>

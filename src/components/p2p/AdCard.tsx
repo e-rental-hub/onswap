@@ -35,7 +35,7 @@ export default function AdCard({ ad }: AdCardProps) {
           </div>
         </div>
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isBuy ? 'badge-buy' : 'badge-sell'}`}>
-          {isBuy ? 'BUY' : 'SELL'}
+          {isBuy ? 'BUY AD' : 'SELL AD'}
         </span>
       </div>
 
@@ -70,7 +70,7 @@ export default function AdCard({ ad }: AdCardProps) {
           ⏱ {ad.paymentWindow} min window
         </span>
         <Link href={`/p2p/ads/${ad._id}`}>
-          <button className={isBuy ? 'btn-buy text-sm px-5 py-2' : 'btn-sell text-sm px-5 py-2'}>
+          <button className={isBuy ? 'btn-sell text-sm px-5 py-2' : 'btn-buy text-sm px-5 py-2'}>
             {isBuy ? 'Sell Pi' : 'Buy Pi'} →
           </button>
         </Link>

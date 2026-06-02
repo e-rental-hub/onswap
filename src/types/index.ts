@@ -112,6 +112,7 @@ export interface User {
   userAccountDetails:     PaymentMethodDetail[];
   piWalletAddresses:  PiWalletAddress[];
   createdAt:          string;
+  preferredCurrency: CurrencyEnum;
 }
 
 // ─── Ads ──────────────────────────────────────────────────────────────────────
@@ -136,7 +137,7 @@ export interface Ad {
   minLimit:        number;
   maxLimit:        number;
   pricePerPi:      number;
-  currency:        string;
+  currency:        CurrencyEnum;
   paymentMethods:  PaymentMethodType[];
   sellerAccountDetail?:  AdPaymentDetail;
   paymentWindow:   number;
@@ -193,7 +194,7 @@ export interface Order {
   piAmount:       number;
   nairaAmount:    number;
   pricePerPi:     number;
-  currency:       string;
+  currency:       CurrencyEnum;
   paymentMethod:  PaymentMethodType;
   sellerAccountDetail: AdPaymentDetail;
   buyerWalletAddress: string
@@ -281,6 +282,6 @@ export enum EscrowStatusEnum {
 }
 
 export enum CurrencyEnum {
-  naira        = 'NGN',
-  kenyaShilling = 'KES',
+  NGN        = 'NGN',
+  KES = 'KES',
 }

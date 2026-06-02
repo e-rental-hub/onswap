@@ -19,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         />
         <ThemeProvider>
-          <AuthProvider>          
+          <AuthProvider>        
             {children}
           </AuthProvider>
         </ThemeProvider>
