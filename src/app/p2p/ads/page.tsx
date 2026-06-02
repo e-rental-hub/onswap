@@ -391,6 +391,7 @@ export default function PostAdPage() {
       pricePerPi:    Number(form.pricePerPi),
       paymentMethods: form.acceptedTypes,
       paymentWindow: Number(form.paymentWindow),
+      currency:      preferredCurrency.code,
       terms:         form.terms,
       autoReply:     form.autoReply,
       buyerPiWalletId: form.type==='buy'? selectedPiWalletId as string : undefined,
