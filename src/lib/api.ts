@@ -55,7 +55,7 @@ export const authApi = {
   getMe:         () => apiClient.get('/auth/me'),
   updateProfile: (data: { displayName?: string; phone?: string }) =>
     apiClient.patch('/auth/profile', data),
-  setCurrency: (data: {selectedCurrency: CurrencyEnum}) => 
+  setCurrency: (data: {currency: CurrencyEnum}) => 
     apiClient.post('/auth/set-currency', data)
 };
 

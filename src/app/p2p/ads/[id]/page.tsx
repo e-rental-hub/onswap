@@ -271,12 +271,6 @@ export default function AdDetailPage() {
   const router   = useRouter();
   const { user, preferredCurrency, isAuthenticated, isDevMode } = useAuth();
 
-  // Resolved currency helpers — single source of truth throughout the page
-  const adCurrency = CURRENCIES.find((c) => c.code === ad?.currency);
-  const currencySymbol = adCurrency ? adCurrency.symbol : preferredCurrency.symbol;
-  const currencyCode   = adCurrency ? adCurrency.code : preferredCurrency.code;
-  const currencyLabel  = adCurrency ? adCurrency.label : preferredCurrency.label;
-
   const [ad,             setAd]             = useState<Ad | null>(null);
   const [loading,        setLoading]        = useState(true);
   const [step,           setStep]           = useState<Step>('configure');
@@ -326,6 +320,12 @@ export default function AdDetailPage() {
   }, [isAuthenticated]);
 
   useEffect(() => { fetchAd(); fetchWallet(); }, [fetchAd, fetchWallet]);
+
+  // Resolved currency helpers — single source of truth throughout the page
+  const adCurrency = CURRENCIES.find((c) => c.code === ad?.currency);
+  const currencySymbol = adCurrency ? adCurrency.symbol : preferredCurrency.symbol;
+  const currencyCode   = adCurrency ? adCurrency.code : preferredCurrency.code;
+  const currencyLabel  = adCurrency ? adCurrency.label : preferredCurrency.label;
 
   // ── Derived amounts ──────────────────────────────────────────────────────────
   const pricePerPi   = ad?.pricePerPi ?? 0;

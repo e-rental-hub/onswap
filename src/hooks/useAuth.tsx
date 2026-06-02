@@ -209,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── User Currency helpers ─────────────────────────────────────────────
 
   const setUserCurrency = useCallback(async (selectedCurrency: CurrencyEnum) => {
-    const res = await authApi.setCurrency({selectedCurrency});
+    const res = await authApi.setCurrency({currency: selectedCurrency});
     const currency = res.data.currency;
 
     setUser((prev) => {
