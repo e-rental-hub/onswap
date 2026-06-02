@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(t);
       setUser(u);
       const userCurrency = CURRENCIES.find(
-        (c) => c.code === user?.preferredCurrency
+        (c) => c.code === u?.preferredCurrency
       ) || CURRENCIES[0];
       setPreferredCurrency(userCurrency)
       logger.info(`Pi auth success: ${u.username} (uid=${u.piUid})`);
