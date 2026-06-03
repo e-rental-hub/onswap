@@ -7,6 +7,7 @@ import { useAuth }     from '@/hooks/useAuth';
 import { Order, OrderStatus, Message, PAYMENT_METHOD_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types';
 import { logger }      from '@/lib/logger';
 import { CURRENCIES } from '@/lib/constants';
+import { CopyRow } from '@/components/CopyRow';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -53,12 +54,11 @@ export default function OrderDetailPage() {
   const [cancelReason,  setCancelReason]  = useState('');
   const [showDispute,   setShowDispute]   = useState(false);
   const [showCancel,    setShowCancel]    = useState(false);
-  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+  const [isChatCollapsed, setIsChatCollapsed] = useState(true);
 
   // Resolved currency helpers — single source of truth throughout the page
   const orderCurrency = CURRENCIES.find((c) => c.code === order?.currency);
   const currencySymbol = orderCurrency ? orderCurrency.symbol : preferredCurrency.symbol;
-  const currencyCode   = orderCurrency ? orderCurrency.code : preferredCurrency.code;
   const currencyLabel  = orderCurrency ? orderCurrency.label : preferredCurrency.label;
 
   useEffect(() => { if (!isAuthenticated) router.push('/auth/login'); }, [isAuthenticated, router]);
@@ -151,10 +151,7 @@ export default function OrderDetailPage() {
   const isActive      = !['completed', 'cancelled', 'refunded'].includes(order.status);
 
   // Payment details from the ad (seller's account)
-  const adPaymentDetails = (order.ad as unknown as {
-    paymentDetails?: { type: string; accountName?: string; accountNumber?: string; bankName?: string }[]
-  })?.paymentDetails ?? [];
-  const sellerPaymentDetail = adPaymentDetails.find((d) => d.type === order.paymentMethod);
+  const sellerPaymentDetail = order.sellerAccountDetail;
 
   // Countdown
   const deadline  = order.paymentDeadline ? new Date(order.paymentDeadline) : null;
@@ -305,24 +302,14 @@ export default function OrderDetailPage() {
                 <p className="font-bold mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--pi-gold)' }}>
                   💳 Send Payment To
                 </p>
-                <div className="space-y-3 mb-4">
+                <div className="space-y-2 mb-4">
                   {[
-                    { label: 'Account Name',   value: sellerPaymentDetail.accountName },
-                    { label: 'Account Number', value: sellerPaymentDetail.accountNumber, mono: true, large: true },
-                    { label: 'Bank',           value: sellerPaymentDetail.bankName },
-                  ].filter((r) => r.value).map((row) => (
-                    <div key={row.label} className="flex justify-between items-center py-2.5 border-b"
-                      style={{ borderColor: 'var(--border-subtle)' }}>
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
-                      <span className="font-bold"
-                        style={{
-                          fontFamily: row.mono ? 'var(--font-mono)' : 'inherit',
-                          color:      row.mono ? 'var(--pi-gold)'   : 'var(--text-primary)',
-                          fontSize:   row.large ? '1.1rem'           : '0.875rem',
-                        }}>
-                        {row.value}
-                      </span>
-                    </div>
+                    { label: 'Account Name',   value: sellerPaymentDetail.accountName,   mono: false, large: false },
+                    { label: 'Account Number', value: sellerPaymentDetail.accountNumber, mono: true,  large: true  },
+                    { label: 'Bank',           value: sellerPaymentDetail.bankName,      mono: false, large: false },
+                  ].filter((r): r is typeof r & { value: string } => !!r.value)
+                  .map((row) => (
+                    <CopyRow key={row.label} {...row} />
                   ))}
                 </div>
                 <div className="rounded-xl p-4"
