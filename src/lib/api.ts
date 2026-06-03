@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { logger } from './logger';
-import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType } from '@/types';
+import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType, CurrencyEnum } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -8,36 +8,16 @@ export const apiClient = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 15000,
+  withCredentials: true,
 });
 
-apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('pi_p2p_token');
-      if (token && config.headers) config.headers.Authorization = `Bearer ${token}`;
-    }
-    logger.debug(`→ ${config.method?.toUpperCase()} ${config.url}`);
-    return config;
-  },
-  (error) => { logger.error('Request error:', error); return Promise.reject(error); }
-);
-
-apiClient.interceptors.response.use(
-  (response) => { logger.debug(`← ${response.status} ${response.config.url}`); return response; },
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      logger.warn('Session expired');
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('pi_p2p_token');
-        localStorage.removeItem('pi_p2p_user');
-        window.location.href = '/';
-      }
-    }
-    const msg = (error.response?.data as { message?: string })?.message || error.message;
-    logger.error(`API Error [${error.response?.status ?? 'network'}]: ${msg}`);
-    return Promise.reject(error);
+export const setAuthToken = (token: string | null) => {
+  if (token) {
+    return (apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`);
+  } else {
+    return delete apiClient.defaults.headers.common['Authorization'];
   }
-);
+};
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -45,8 +25,11 @@ export const authApi = {
   piAuth: (data: { accessToken: string; uid: string; username: string; displayName?: string; phone?: string }) =>
     apiClient.post('/auth/pi', data),
   getMe:         () => apiClient.get('/auth/me'),
+  logout:        () => apiClient.post('/auth/logout'),
   updateProfile: (data: { displayName?: string; phone?: string }) =>
     apiClient.patch('/auth/profile', data),
+  setCurrency: (data: {currency: CurrencyEnum}) => 
+    apiClient.post('/auth/set-currency', data)
 };
 
 // ─── Saved account details ────────────────────────────────────────────────────

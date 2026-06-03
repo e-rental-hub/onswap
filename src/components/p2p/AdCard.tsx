@@ -1,11 +1,18 @@
 'use client';
 import Link from 'next/link';
 import { Ad, PAYMENT_METHOD_LABELS } from '@/types';
+import { CURRENCIES } from '@/lib/constants';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AdCardProps { ad: Ad; }
 
 export default function AdCard({ ad }: AdCardProps) {
+  const {preferredCurrency} = useAuth();
+
   const isBuy = ad.type === 'buy';
+  // Resolved currency helpers — single source of truth throughout the page
+  const adCurrency = CURRENCIES.find((c) => c.code === ad?.currency);
+  const currencySymbol = adCurrency ? adCurrency.symbol : preferredCurrency.symbol;
 
   return (
     <div className="card p-5 hover:border-opacity-50 transition-all duration-200 group"
@@ -35,7 +42,7 @@ export default function AdCard({ ad }: AdCardProps) {
           </div>
         </div>
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isBuy ? 'badge-buy' : 'badge-sell'}`}>
-          {isBuy ? 'BUY' : 'SELL'}
+          {isBuy ? 'BUY AD' : 'SELL AD'}
         </span>
       </div>
 
@@ -43,12 +50,12 @@ export default function AdCard({ ad }: AdCardProps) {
       <div className="mb-4">
         <div className="flex items-baseline gap-1.5">
           <span className="text-2xl font-bold" style={{ fontFamily: 'var(--font-display)', color: 'var(--pi-gold)' }}>
-            ₦{ad.pricePerPi.toLocaleString()}
+            {currencySymbol}{ad.pricePerPi.toLocaleString()}
           </span>
           <span className="text-sm" style={{ color: 'var(--text-muted)' }}>/ π</span>
         </div>
         <div className="flex items-center gap-4 mt-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-          <span>Limit: <span style={{ color: 'var(--text-primary)' }}>₦{ad.minLimit.toLocaleString()} – ₦{ad.maxLimit.toLocaleString()}</span></span>
+          <span>Limit: <span style={{ color: 'var(--text-primary)' }}>{currencySymbol}{ad.minLimit.toLocaleString()} – {currencySymbol}{ad.maxLimit.toLocaleString()}</span></span>
         </div>
         <div className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
           Available: <span style={{ color: 'var(--pi-gold-bright)' }}>{ad.availableAmount.toLocaleString()} π</span>
@@ -70,7 +77,7 @@ export default function AdCard({ ad }: AdCardProps) {
           ⏱ {ad.paymentWindow} min window
         </span>
         <Link href={`/p2p/ads/${ad._id}`}>
-          <button className={isBuy ? 'btn-buy text-sm px-5 py-2' : 'btn-sell text-sm px-5 py-2'}>
+          <button className={isBuy ? 'btn-sell text-sm px-5 py-2' : 'btn-buy text-sm px-5 py-2'}>
             {isBuy ? 'Sell Pi' : 'Buy Pi'} →
           </button>
         </Link>

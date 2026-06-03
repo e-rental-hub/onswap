@@ -6,6 +6,8 @@ import { ordersApi }   from '@/lib/api';
 import { useAuth }     from '@/hooks/useAuth';
 import { Order, OrderStatus, Message, PAYMENT_METHOD_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types';
 import { logger }      from '@/lib/logger';
+import { CURRENCIES } from '@/lib/constants';
+import { CopyRow } from '@/components/CopyRow';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,7 +42,7 @@ function StepRow({ n, label, done, active }: { n: number; label: string; done: b
 export default function OrderDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, preferredCurrency, isAuthenticated } = useAuth();
 
   const [order,         setOrder]         = useState<Order | null>(null);
   const [loading,       setLoading]       = useState(true);
@@ -52,6 +54,12 @@ export default function OrderDetailPage() {
   const [cancelReason,  setCancelReason]  = useState('');
   const [showDispute,   setShowDispute]   = useState(false);
   const [showCancel,    setShowCancel]    = useState(false);
+  const [isChatCollapsed, setIsChatCollapsed] = useState(true);
+
+  // Resolved currency helpers — single source of truth throughout the page
+  const orderCurrency = CURRENCIES.find((c) => c.code === order?.currency);
+  const currencySymbol = orderCurrency ? orderCurrency.symbol : preferredCurrency.symbol;
+  const currencyLabel  = orderCurrency ? orderCurrency.label : preferredCurrency.label;
 
   useEffect(() => { if (!isAuthenticated) router.push('/auth/login'); }, [isAuthenticated, router]);
 
@@ -143,10 +151,7 @@ export default function OrderDetailPage() {
   const isActive      = !['completed', 'cancelled', 'refunded'].includes(order.status);
 
   // Payment details from the ad (seller's account)
-  const adPaymentDetails = (order.ad as unknown as {
-    paymentDetails?: { type: string; accountName?: string; accountNumber?: string; bankName?: string }[]
-  })?.paymentDetails ?? [];
-  const sellerPaymentDetail = adPaymentDetails.find((d) => d.type === order.paymentMethod);
+  const sellerPaymentDetail = order.sellerAccountDetail;
 
   // Countdown
   const deadline  = order.paymentDeadline ? new Date(order.paymentDeadline) : null;
@@ -210,8 +215,8 @@ export default function OrderDetailPage() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Pi Amount',    value: `π${order.piAmount.toLocaleString()}`,     mono: true,  highlight: true  },
-                  { label: 'Naira Amount', value: `₦${order.nairaAmount.toLocaleString()}`,  mono: true,  highlight: false },
-                  { label: 'Rate',         value: `₦${order.pricePerPi.toLocaleString()}/π`, mono: false, highlight: false },
+                  { label: `${currencyLabel} Amount`, value: `${currencySymbol}${order.nairaAmount.toLocaleString()}`,  mono: true,  highlight: false },
+                  { label: 'Rate',         value: `${currencySymbol}${order.pricePerPi.toLocaleString()}/π`, mono: false, highlight: false },
                   { label: 'Method',       value: PAYMENT_METHOD_LABELS[order.paymentMethod], mono: false, highlight: false },
                 ].map((item) => (
                   <div key={item.label} className="rounded-xl p-3"
@@ -285,7 +290,7 @@ export default function OrderDetailPage() {
                     π{order.escrow.piAmount.toFixed(4)}
                   </p>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    ≈ ₦{order.nairaAmount.toLocaleString()}
+                    ≈ {currencySymbol}{order.nairaAmount.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -297,30 +302,20 @@ export default function OrderDetailPage() {
                 <p className="font-bold mb-4" style={{ fontFamily: 'var(--font-display)', color: 'var(--pi-gold)' }}>
                   💳 Send Payment To
                 </p>
-                <div className="space-y-3 mb-4">
+                <div className="space-y-2 mb-4">
                   {[
-                    { label: 'Account Name',   value: sellerPaymentDetail.accountName },
-                    { label: 'Account Number', value: sellerPaymentDetail.accountNumber, mono: true, large: true },
-                    { label: 'Bank',           value: sellerPaymentDetail.bankName },
-                  ].filter((r) => r.value).map((row) => (
-                    <div key={row.label} className="flex justify-between items-center py-2.5 border-b"
-                      style={{ borderColor: 'var(--border-subtle)' }}>
-                      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{row.label}</span>
-                      <span className="font-bold"
-                        style={{
-                          fontFamily: row.mono ? 'var(--font-mono)' : 'inherit',
-                          color:      row.mono ? 'var(--pi-gold)'   : 'var(--text-primary)',
-                          fontSize:   row.large ? '1.1rem'           : '0.875rem',
-                        }}>
-                        {row.value}
-                      </span>
-                    </div>
+                    { label: 'Account Name',   value: sellerPaymentDetail.accountName,   mono: false, large: false },
+                    { label: 'Account Number', value: sellerPaymentDetail.accountNumber, mono: true,  large: true  },
+                    { label: 'Bank',           value: sellerPaymentDetail.bankName,      mono: false, large: false },
+                  ].filter((r): r is typeof r & { value: string } => !!r.value)
+                  .map((row) => (
+                    <CopyRow key={row.label} {...row} />
                   ))}
                 </div>
                 <div className="rounded-xl p-4"
                   style={{ background: 'rgba(240,160,60,0.08)', border: '1px solid rgba(240,160,60,0.2)' }}>
                   <p className="text-sm" style={{ color: 'var(--pi-gold)' }}>
-                    Transfer exactly <strong>₦{order.nairaAmount.toLocaleString()}</strong> via{' '}
+                    Transfer exactly <strong>{currencySymbol}{order.nairaAmount.toLocaleString()}</strong> via{' '}
                     {PAYMENT_METHOD_LABELS[order.paymentMethod]}, then click "I've Paid".
                   </p>
                 </div>
@@ -328,68 +323,122 @@ export default function OrderDetailPage() {
             )}
 
             {/* Chat */}
-            <div className="card flex flex-col" style={{ height: '380px' }}>
-              <div className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0"
-                style={{ borderColor: 'var(--border-subtle)' }}>
-                <div className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Order Chat</span>
-              </div>
+            <div
+              className="card flex flex-col overflow-hidden transition-all duration-300"
+            >
+              {/* Header */}
+              <div
+                className="px-4 py-3 border-b flex items-center justify-between flex-shrink-0"
+                style={{ borderColor: 'var(--border-subtle)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400" />
+                  <span
+                    className="text-sm font-semibold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    Order Chat
+                  </span>
+                </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {order.messages.length === 0 && (
-                  <p className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>
-                    No messages yet.
-                  </p>
-                )}
-                {order.messages.map((msg, i) => {
-                  const senderId = typeof msg.sender === 'string' ? msg.sender : (msg.sender as unknown as { _id?: string; id?: string })._id ?? msg.sender.id;
-                  const isMe     = senderId === user.id;
-                  const isSystem = msg.type === 'system';
-
-                  if (isSystem) return (
-                    <div key={i} className="text-center text-xs px-4 py-2 rounded-lg mx-4"
-                      style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}>
-                      {msg.content}
-                    </div>
-                  );
-
-                  return (
-                    <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <div style={{ maxWidth: '75%' }}>
-                        <div className={`px-4 py-2.5 text-sm rounded-2xl ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
-                          style={{
-                            background: isMe
-                              ? 'linear-gradient(135deg,rgba(240,160,60,0.2),rgba(236,133,24,0.15))'
-                              : 'var(--bg-elevated)',
-                            border:     `1px solid ${isMe ? 'rgba(240,160,60,0.2)' : 'var(--border)'}`,
-                            color:      'var(--text-primary)',
-                          }}>
-                          {msg.content}
-                        </div>
-                        <p className={`text-xs mt-1 ${isMe ? 'text-right' : ''}`} style={{ color: 'var(--text-muted)' }}>
-                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="px-4 py-3 border-t flex gap-2 flex-shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
-                <input
-                  className="input-dark flex-1 text-sm"
-                  style={{ padding: '8px 12px' }}
-                  placeholder="Type a message…"
-                  value={chatMsg}
-                  onChange={(e) => setChatMsg(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChat()}
-                  disabled={!isActive}
-                />
-                <button onClick={sendChat} disabled={!chatMsg.trim() || sendingMsg || !isActive}
-                  className="btn-pi px-4 py-2 text-sm" style={{ minWidth: 60 }}>
-                  {sendingMsg ? '…' : 'Send'}
+                <button
+                  type="button"
+                  onClick={() => setIsChatCollapsed((v) => !v)}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-300"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    color: 'var(--text-muted)',
+                  }}
+                  aria-label={isChatCollapsed ? 'Expand chat' : 'Collapse chat'}
+                >
+                  <svg
+                    className={`transition-transform duration-300 ${
+                      isChatCollapsed ? '-rotate-90' : 'rotate-0'
+                    }`}
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
                 </button>
               </div>
+
+              <div
+                className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                  isChatCollapsed
+                    ? 'max-h-0 opacity-0'
+                    : 'max-h-[600px] opacity-100'
+                }`}
+              >
+                 {/* Messages */}
+                <div className="h-[280px] overflow-y-auto p-4 space-y-3">
+                  {order.messages.length === 0 && (
+                    <p className="text-center text-sm py-8" style={{ color: 'var(--text-muted)' }}>
+                      No messages yet.
+                    </p>
+                  )}
+                  {order.messages.map((msg, i) => {
+                    const senderId = typeof msg.sender === 'string' ? msg.sender : (msg.sender as unknown as { _id?: string; id?: string })._id ?? msg.sender.id;
+                    const isMe     = senderId === user.id;
+                    const isSystem = msg.type === 'system';
+
+                    if (isSystem) return (
+                      <div key={i} className="text-center text-xs px-4 py-2 rounded-lg mx-4"
+                        style={{ background: 'rgba(99,102,241,0.1)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.2)' }}>
+                        {msg.content}
+                      </div>
+                    );
+
+                    return (
+                      <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div style={{ maxWidth: '75%' }}>
+                          <div className={`px-4 py-2.5 text-sm rounded-2xl ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
+                            style={{
+                              background: isMe
+                                ? 'linear-gradient(135deg,rgba(240,160,60,0.2),rgba(236,133,24,0.15))'
+                                : 'var(--bg-elevated)',
+                              border:     `1px solid ${isMe ? 'rgba(240,160,60,0.2)' : 'var(--border)'}`,
+                              color:      'var(--text-primary)',
+                            }}>
+                            {msg.content}
+                          </div>
+                          <p className={`text-xs mt-1 ${isMe ? 'text-right' : ''}`} style={{ color: 'var(--text-muted)' }}>
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Input */}
+                <div
+                  className="px-4 py-3 border-t flex gap-2 flex-shrink-0"
+                  style={{ borderColor: 'var(--border-subtle)' }}
+                >
+                  <input
+                    className="input-dark flex-1 text-sm"
+                    style={{ padding: '8px 12px' }}
+                    placeholder="Type a message…"
+                    value={chatMsg}
+                    onChange={(e) => setChatMsg(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChat()}
+                    disabled={!isActive}
+                  />
+                  <button onClick={sendChat} disabled={!chatMsg.trim() || sendingMsg || !isActive}
+                    className="btn-pi px-4 py-2 text-sm" style={{ minWidth: 60 }}>
+                    {sendingMsg ? '…' : 'Send'}
+                  </button>
+                </div>
+              </div>
+
+              
             </div>
           </div>
 
@@ -524,7 +573,7 @@ export default function OrderDetailPage() {
                   Trade Complete!
                 </h3>
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  π{order.piAmount} for ₦{order.nairaAmount.toLocaleString()}
+                  π{order.piAmount} for {currencySymbol}{order.nairaAmount.toLocaleString()}
                 </p>
                 {order.completedAt && (
                   <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>

@@ -14,7 +14,8 @@ import {
 } from '@/types';
 import { logger }   from '@/lib/logger';
 import { useToast } from '@/hooks/useToast';
-import { ALL_PAYMENT_TYPES } from '@/lib/constants';
+import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
+import BottomNav from '@/components/layout/BottomNav';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ function AdCard({
   onCancel: () => void; onHardDelete: () => void;
 }) {
   const tradedPi = ad.piAmount - ad.availableAmount;
+  const adCurrency = CURRENCIES.find((c) => c.code === ad.currency)
   return (
     <div className="card p-5">
       <div className="flex items-start gap-4">
@@ -120,10 +122,10 @@ function AdCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
             <span className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
-              ₦{ad.pricePerPi.toLocaleString()} / π
+              {adCurrency?.symbol}{ad.pricePerPi.toLocaleString()} / π
             </span>
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Limit: ₦{ad.minLimit.toLocaleString()}–₦{ad.maxLimit.toLocaleString()}
+              Limit: {adCurrency?.symbol}{ad.minLimit.toLocaleString()}–{adCurrency?.symbol}{ad.maxLimit.toLocaleString()}
             </span>
           </div>
           <div
@@ -255,7 +257,7 @@ function AdCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PostAdPage() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, preferredCurrency } = useAuth();
   const router = useRouter();
   const { toast, toastErr, showToast } = useToast();
 
@@ -389,6 +391,7 @@ export default function PostAdPage() {
       pricePerPi:    Number(form.pricePerPi),
       paymentMethods: form.acceptedTypes,
       paymentWindow: Number(form.paymentWindow),
+      currency:      preferredCurrency.code,
       terms:         form.terms,
       autoReply:     form.autoReply,
       buyerPiWalletId: form.type==='buy'? selectedPiWalletId as string : undefined,
@@ -723,7 +726,7 @@ export default function PostAdPage() {
                       className="block text-sm font-medium mb-1.5"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      Price per Pi (₦)
+                      Price per Pi ({preferredCurrency.symbol})
                     </label>
                     <input
                       className="input-dark"
@@ -739,7 +742,7 @@ export default function PostAdPage() {
                       className="block text-sm font-medium mb-1.5"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      Min Limit (₦)
+                      Min Limit ({preferredCurrency.symbol})
                     </label>
                     <input
                       className="input-dark"
@@ -755,7 +758,7 @@ export default function PostAdPage() {
                       className="block text-sm font-medium mb-1.5"
                       style={{ color: 'var(--text-secondary)' }}
                     >
-                      Max Limit (₦)
+                      Max Limit ({preferredCurrency.symbol})
                     </label>
                     <input
                       className="input-dark"
@@ -977,6 +980,7 @@ export default function PostAdPage() {
           showToast={showToast}
         />
       )}
+      <BottomNav />
     </div>
   );
 }
