@@ -266,7 +266,6 @@ export default function P2PMarketPage() {
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethodType | ''>('');
   const [amountFilter, setAmountFilter] = useState('');
   const [total, setTotal] = useState(0);
-  const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(preferredCurrency.code);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
   const fetchAds = useCallback(async () => {
@@ -284,7 +283,7 @@ export default function P2PMarketPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, paymentFilter, amountFilter, currencyCode]);
+  }, [tab, paymentFilter, amountFilter, preferredCurrency]);
 
   useEffect(() => { if (mode === 'p2p') fetchAds(); }, [fetchAds, mode]);
 
