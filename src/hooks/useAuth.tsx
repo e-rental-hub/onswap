@@ -5,6 +5,8 @@ import {
   useState,
   useCallback,
   ReactNode,
+  useEffect,
+  useRef,
 } from 'react';
 import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
 import { logger } from '@/lib/logger';
@@ -64,75 +66,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session from localStorage on mount
-  // useEffect(() => {
-  //   const storedToken = localStorage.getItem(TOKEN_KEY);
-  //   const storedUser = localStorage.getItem(USER_KEY);
-  //   if (storedToken && storedUser) {
-  //     setToken(storedToken);
-  //     try {
-  //       setUser(JSON.parse(storedUser));
-  //     } catch {
-  //       logger.warn('Corrupt stored user — clearing');
-  //       localStorage.removeItem(USER_KEY);
-  //     }
-  //   }
-  //   setLoading(false);
-  // }, []);
+  const currencyFromUser = (u: User | null) =>
+    CURRENCIES.find((c) => c.code === u?.preferredCurrency) ?? CURRENCIES[0];
+
+  // ── Rehydrate on mount — hit /getMe with the httpOnly cookie ──────────────────
+  // If your backend issues a httpOnly refresh cookie, this is the only safe
+  const bootstrapped = useRef(false);
+
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+
+    const bootstrap = async () => {
+      try {
+        const res = await authApi.getMe();
+        const u   = res.data.user as User;
+        setUser(u);
+        setPreferredCurrency(currencyFromUser(u));
+      } catch {
+        // unauthenticated — defaults remain
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    bootstrap();
+  }, []);
 
   // ── Pi login / register ──────────────────────────────────────────────────────
 
-  const loginWithPi = useCallback(
-    async (
-      accessToken: string,
-      uid: string,
-      username: string,
-      displayName?: string
-    ) => {
-      const res = await authApi.piAuth({ accessToken, uid, username, displayName });
-      const { token: t, user: u } = res.data as { token: string; user: User };
+  const loginWithPi = useCallback(async (
+    accessToken: string,
+    uid:         string,
+    username:    string,
+    displayName?: string,
+  ) => {
+    const res = await authApi.piAuth({ accessToken, uid, username, displayName });
+    const { token: t, user: u } = res.data as { token: string; user: User };
 
-      // localStorage.setItem(TOKEN_KEY, t);
-      // localStorage.setItem(USER_KEY, JSON.stringify(u));
-      setAuthToken(t);
-      setToken(t);
-      setUser(u);
-      const userCurrency = CURRENCIES.find(
-        (c) => c.code === u.preferredCurrency
-      ) || CURRENCIES[0];
-      setPreferredCurrency(userCurrency)
-      // logger.info(`Pi auth success: ${u.username} (uid=${u.piUid})`);
-    },
-    []
-  );
+    setAuthToken(t);
+    setToken(t);
+    setUser(u);
+    setPreferredCurrency(currencyFromUser(u));
+  }, []);
 
   // ── Logout ───────────────────────────────────────────────────────────────────
 
-  const logout = useCallback(() => {
-    // localStorage.removeItem(TOKEN_KEY);
-    // localStorage.removeItem(USER_KEY);
-    setAuthToken(null);
-    setToken(null);
-    setUser(null);
-    logger.info('Logged out');
-    window.location.href = '/';
+  const logout = useCallback(async () => {
+    try {
+      logger.info('Logging out');
+      (await authApi.logout()); // clears the httpOnly cookie server-side
+    } finally {
+      setAuthToken(null);
+      setToken(null);
+      setUser(null);
+      setPreferredCurrency(CURRENCIES[0]);
+      window.location.href = '/';
+    }
   }, []);
 
   // ── Refresh user from server ──────────────────────────────────────────────────
 
   const refreshUser = useCallback(async () => {
-    try {
-      const res = await authApi.getMe();
-      const u = res.data.user as User;
-      setUser(u);
-      const userCurrency = CURRENCIES.find(
-        (c) => c.code === u.preferredCurrency
-      ) || CURRENCIES[0];
-      setPreferredCurrency(userCurrency)
-      localStorage.setItem(USER_KEY, JSON.stringify(u));
-    } catch (err) {
-      logger.error('refreshUser failed:', err);
-    }
+    const res = await authApi.getMe();
+    const u   = res.data.user as User;
+    setUser(u);
+    setPreferredCurrency(currencyFromUser(u));
   }, []);
 
   // ── Payment method helpers ────────────────────────────────────────────────────
@@ -140,9 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncPaymentMethods = (methods: PaymentMethodDetail[]) => {
     setUser((prev) => {
       if (!prev) return prev;
-      const updated = { ...prev, paymentMethods: methods };
-      localStorage.setItem(USER_KEY, JSON.stringify(updated));
-      return updated;
+      return { ...prev, paymentMethods: methods };
     });
   };
 
@@ -178,9 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncPiWalletAddresses = (addresses: PiWalletAddress[]) => {
     setUser((prev) => {
       if (!prev) return prev;
-      const updated = { ...prev, piWalletAddresses: addresses };
-      localStorage.setItem(USER_KEY, JSON.stringify(updated));
-      return updated;
+      return { ...prev, piWalletAddresses: addresses };
     });
   };
 
@@ -213,22 +208,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── User Currency helpers ─────────────────────────────────────────────
 
   const setUserCurrency = useCallback(async (selectedCurrency: CurrencyEnum) => {
-    const res = await authApi.setCurrency({currency: selectedCurrency});
-    const currency = res.data.preferredCurrency;
+  const res      = await authApi.setCurrency({ currency: selectedCurrency });
+  const currency = res.data.preferredCurrency;
 
-    setUser((prev) => {
-      if (!prev) return prev;
-      const updated = { ...prev, preferredCurrency: currency };
-      localStorage.setItem(USER_KEY, JSON.stringify(updated));
-      return updated;
-    });
-
-    const userCurrency = CURRENCIES.find(
-      (c) => c.code === currency
-    ) || CURRENCIES[0];
-      
-    setPreferredCurrency(userCurrency)
-  },[]);
+  setUser((prev) => prev ? { ...prev, preferredCurrency: currency } : prev);
+  setPreferredCurrency(CURRENCIES.find((c) => c.code === currency) ?? CURRENCIES[0]);
+}, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
 

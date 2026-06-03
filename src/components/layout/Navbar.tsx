@@ -2,20 +2,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { useState } from 'react';
-import { ThemeToggle, ThemeToggleIcon } from './Themetoggle';
+import { ThemeToggleIcon } from './Themetoggle';
 import Image from 'next/image';
 
 export default function Navbar() {
   const { user, logout, isAuthenticated } = useAuth();
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const navLinks = [
-    { href: '/p2p', label: 'Market' },
-    { href: '/p2p/ads', label: 'Post Ad' },
-    { href: '/p2p/orders', label: 'My Orders' },
-  ];
 
   return (
     <nav className="sticky top-0 z-50 border-b" style={{backdropFilter: 'blur(20px)', borderColor: 'var(--border-subtle)' }}>

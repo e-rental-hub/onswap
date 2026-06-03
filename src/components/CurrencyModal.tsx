@@ -6,13 +6,11 @@ import { CurrencyEnum } from "@/types";
 
 // ── Currency Picker Modal ─────────────────────────────────────────────────────
 export function CurrencyModal({
-  selected,
   onClose,
 }: {
-  selected: CurrencyEnum;
   onClose: () => void;
 }) {
-  const { setUserCurrency, setPreferredCurrency } = useAuth();
+  const { setUserCurrency, setPreferredCurrency, preferredCurrency } = useAuth();
   const { showToast } = useToast();
 
   // ── Save selected Currency ─────────────────────────────────────────────────────────
@@ -61,7 +59,7 @@ export function CurrencyModal({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {CURRENCIES.map((c) => {
-            const active = selected === c.code;
+            const active = c.code === preferredCurrency.code;
             return (
               <button
                 key={c.code}

@@ -429,7 +429,6 @@ export default function P2PMarketPage() {
       {/* Currency modal */}
       {showCurrencyModal && (
         <CurrencyModal
-          selected={preferredCurrency.code}
           onClose={() => setShowCurrencyModal(false)}
         />
       )}

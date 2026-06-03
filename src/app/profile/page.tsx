@@ -509,7 +509,6 @@ export default function ProfilePage() {
       {/* Currency modal */}
       {showCurrencyModal && (
         <CurrencyModal
-          selected={preferredCurrency.code}
           onClose={() => setShowCurrencyModal(false)}
         />
       )}

@@ -18,11 +18,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           src="https://sdk.minepi.com/pi-sdk.js"
           strategy="beforeInteractive"
         />
-        <ThemeProvider>
-          <AuthProvider>        
+        <AuthProvider>
+          <ThemeProvider>       
             {children}
-          </AuthProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </AuthProvider>
         
         <PiInit />
       </body>
