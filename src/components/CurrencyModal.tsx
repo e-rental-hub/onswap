@@ -7,11 +7,9 @@ import { CurrencyEnum } from "@/types";
 // ── Currency Picker Modal ─────────────────────────────────────────────────────
 export function CurrencyModal({
   selected,
-  onSelect,
   onClose,
 }: {
   selected: CurrencyEnum;
-  onSelect: (code: CurrencyEnum) => void;
   onClose: () => void;
 }) {
   const { setUserCurrency, setPreferredCurrency } = useAuth();
@@ -32,7 +30,6 @@ export function CurrencyModal({
     } finally {
       const selectedCurrency = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0];
       setPreferredCurrency(selectedCurrency);
-      onSelect(currency)
       onClose();
     }
   };

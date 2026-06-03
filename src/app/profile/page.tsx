@@ -168,16 +168,13 @@ function LogoutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
 export default function ProfilePage() {
   const router = useRouter();
   const [showLogout, setShowLogout] = useState(false);
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, preferredCurrency, logout, isAuthenticated } = useAuth();
   const { showToast } = useToast();
 
   const [wallet,      setWallet]      = useState<WalletSummary | null>(null);
   const [selectedSellerAccount, setSelectedSellerAccount] = useState<PaymentMethodDetail | null>(null);
   const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
-  const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(CurrencyEnum.NGN);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
-
-  const currency = CURRENCIES.find((c) => c.code === currencyCode) ?? CURRENCIES[0];
 
   const u = {
     displayName: user?.displayName || user?.username,
@@ -392,8 +389,8 @@ export default function ProfilePage() {
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
           >
-            <span style={{ fontSize: '20px' }}>{currency.flag}</span>
-            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{currency.code}</span>
+            <span style={{ fontSize: '20px' }}>{preferredCurrency.flag}</span>
+            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{preferredCurrency.code}</span>
             <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
           </button>
 
@@ -512,8 +509,7 @@ export default function ProfilePage() {
       {/* Currency modal */}
       {showCurrencyModal && (
         <CurrencyModal
-          selected={currencyCode}
-          onSelect={setCurrencyCode}
+          selected={preferredCurrency.code}
           onClose={() => setShowCurrencyModal(false)}
         />
       )}

@@ -269,13 +269,11 @@ export default function P2PMarketPage() {
   const [currencyCode, setCurrencyCode] = useState<CurrencyEnum>(preferredCurrency.code);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
-  const currency = CURRENCIES.find((c) => c.code === currencyCode) ?? CURRENCIES[0];
-
   const fetchAds = useCallback(async () => {
     setLoading(true);
     try {
       const reversedTab = tab === 'buy' ? 'sell' : 'buy'; // If user is on "Buy" tab, we fetch "Sell" ads and vice versa
-      const params: Record<string, string | number> = { type: reversedTab, currency: currencyCode };
+      const params: Record<string, string | number> = { type: reversedTab, currency: preferredCurrency.code };
       if (paymentFilter) params.paymentMethod = paymentFilter;
       if (amountFilter) params.minAmount = Number(amountFilter);
       const res = await adsApi.getAds(params);
@@ -319,8 +317,8 @@ export default function P2PMarketPage() {
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
           >
-            <span style={{ fontSize: '20px' }}>{currency.flag}</span>
-            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{currency.code}</span>
+            <span style={{ fontSize: '20px' }}>{preferredCurrency.flag}</span>
+            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{preferredCurrency.code}</span>
             <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
           </button>
         </div>
@@ -331,7 +329,7 @@ export default function P2PMarketPage() {
         </div>
 
         {/* ── EXPRESS MODE ─────────────────────────────────────────────── */}
-        {mode === 'express' && <ExpressPanel currency={currency} />}
+        {mode === 'express' && <ExpressPanel currency={preferredCurrency} />}
 
         {/* ── P2P MODE ─────────────────────────────────────────────────── */}
         {mode === 'p2p' && (
@@ -377,7 +375,7 @@ export default function P2PMarketPage() {
                   value={amountFilter}
                   onChange={(e) => setAmountFilter(e.target.value)}
                   className="input-dark text-sm"
-                  placeholder={`Min (${currency.symbol})`}
+                  placeholder={`Min (${preferredCurrency.symbol})`}
                   style={{ width: '140px', padding: '8px 12px', borderRadius: '10px' }}
                   type="number"
                 />
@@ -431,8 +429,7 @@ export default function P2PMarketPage() {
       {/* Currency modal */}
       {showCurrencyModal && (
         <CurrencyModal
-          selected={currencyCode}
-          onSelect={setCurrencyCode}
+          selected={preferredCurrency.code}
           onClose={() => setShowCurrencyModal(false)}
         />
       )}

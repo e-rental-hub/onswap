@@ -98,10 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(t);
       setUser(u);
       const userCurrency = CURRENCIES.find(
-        (c) => c.code === u?.preferredCurrency
+        (c) => c.code === u.preferredCurrency
       ) || CURRENCIES[0];
       setPreferredCurrency(userCurrency)
-      logger.info(`Pi auth success: ${u.username} (uid=${u.piUid})`);
+      // logger.info(`Pi auth success: ${u.username} (uid=${u.piUid})`);
     },
     []
   );
@@ -125,6 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authApi.getMe();
       const u = res.data.user as User;
       setUser(u);
+      const userCurrency = CURRENCIES.find(
+        (c) => c.code === u.preferredCurrency
+      ) || CURRENCIES[0];
+      setPreferredCurrency(userCurrency)
       localStorage.setItem(USER_KEY, JSON.stringify(u));
     } catch (err) {
       logger.error('refreshUser failed:', err);
@@ -210,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setUserCurrency = useCallback(async (selectedCurrency: CurrencyEnum) => {
     const res = await authApi.setCurrency({currency: selectedCurrency});
-    const currency = res.data.currency;
+    const currency = res.data.preferredCurrency;
 
     setUser((prev) => {
       if (!prev) return prev;
