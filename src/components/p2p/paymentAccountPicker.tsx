@@ -9,10 +9,12 @@ import {
   NewPaymentMethodDetail,
   PaymentMethodEnum,
   PaymentMethodType,
+  CurrencyEnum,
 } from '@/types';
-import { ALL_PAYMENT_TYPES } from '@/lib/constants';
+import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
 import { useAuth }  from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
+import { prefetchDNS } from 'react-dom';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,7 @@ interface NewAccountDraft {
   accountNumber: string;
   bankName:      string;
   isDefault:     boolean;
+  currency:      CurrencyEnum;
 }
 
 const BLANK_ACCOUNT: NewAccountDraft = {
@@ -54,6 +57,7 @@ const BLANK_ACCOUNT: NewAccountDraft = {
   accountNumber: '',
   bankName:      '',
   isDefault:     false,
+  currency:      CurrencyEnum.NGN,
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -311,6 +315,8 @@ function EditAccountForm({
   onSave:   (accountId: string, patch: Partial<NewPaymentMethodDetail>) => void;
   onCancel: () => void;
 }) {
+  const { preferredCurrency } = useAuth();
+
   const [accountName,   setAccountName]   = useState(account.accountName);
   const [accountNumber, setAccountNumber] = useState(account.accountNumber);
   const [bankName,      setBankName]      = useState(account.bankName ?? '');
@@ -344,6 +350,22 @@ function EditAccountForm({
           }}
         >
           {PAYMENT_METHOD_LABELS[account.type]}
+        </p>
+      </div>
+
+      <div className="mb-3">
+        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+          Account Currency
+        </label>
+        <p
+          className="text-xs px-3 py-2 rounded-lg"
+          style={{
+            color: 'var(--text-muted)',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          {account.currency? CURRENCIES.find((c) => c.code === account.currency)?.label : preferredCurrency.label}
         </p>
       </div>
 
@@ -402,6 +424,7 @@ function EditAccountForm({
           onSave(account._id, {
             accountName:   accountName.trim(),
             accountNumber: accountNumber.trim(),
+            currency:      account.currency || preferredCurrency.code,
             bankName:      bankName.trim() || undefined,
             isDefault,
           })
@@ -426,7 +449,7 @@ export function AccountDetailsModal({
   isEditMode,
 }: ModalProps) {
 
-  const { addPaymentMethod, updatePaymentMethod, removePaymentMethod } = useAuth();
+  const { addPaymentMethod, preferredCurrency, updatePaymentMethod, removePaymentMethod } = useAuth();
   const { showToast } = useToast();
 
   const [showNewAccount, setShowNewAccount] = useState(false);
@@ -437,7 +460,8 @@ export function AccountDetailsModal({
 
   // ── Refresh helper ─────────────────────────────────────────────────────────
   const refreshAccounts = async (): Promise<PaymentMethodDetail[]> => {
-    const r       = await paymentMethodsApi.getAll();
+    const params: Record<string, string | number> = { currency: preferredCurrency.code };
+    const r       = await paymentMethodsApi.getAll(params);
     const updated = (r.data.userAccountDetails ?? []) as PaymentMethodDetail[];
     setAccounts(updated);
     return updated;
@@ -457,6 +481,7 @@ export function AccountDetailsModal({
     // FIX: Hoist payload above try/catch so the catch block can reference it
     const payload: NewPaymentMethodDetail = {
       type:          newAccount.type,
+      currency:      preferredCurrency.code,
       label:         PAYMENT_METHOD_LABELS[newAccount.type],
       accountName:   newAccount.accountName.trim(),
       accountNumber: newAccount.accountNumber.trim(),
@@ -480,7 +505,8 @@ export function AccountDetailsModal({
         updated.find(
           (a) =>
             a.accountNumber === payload.accountNumber &&
-            a.accountName   === payload.accountName
+            a.accountName   === payload.accountName &&
+            a.currency      === payload.currency
         ) ||
         updated[updated.length - 1];
 
@@ -504,7 +530,8 @@ export function AccountDetailsModal({
             const existing = updated.find(
               (a) =>
                 a.accountNumber === payload.accountNumber &&
-                a.accountName   === payload.accountName
+                a.accountName   === payload.accountName &&
+                a.currency      === payload.currency
             );
             if (existing) setSelectedPaymentAccount(existing);
           }
@@ -706,6 +733,8 @@ const PaymentAccountPicker: React.FC<Props> = ({
   setSelectedPaymentAccount,
 }) => {
 
+  const { preferredCurrency } = useAuth();
+
   const [accounts,          setAccounts]          = useState<PaymentMethodDetail[]>([]);
   const [loading,           setLoading]           = useState(false);
   const [showAccountModal,  setShowAccountModal]  = useState(false);
@@ -716,7 +745,8 @@ const PaymentAccountPicker: React.FC<Props> = ({
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const r    = await paymentMethodsApi.getAll();
+      const params: Record<string, string | number> = { currency: preferredCurrency.code };
+      const r    = await paymentMethodsApi.getAll(params);
       const list = (r.data.userAccountDetails ?? []) as PaymentMethodDetail[];
       setAccounts(list);
 
@@ -731,7 +761,7 @@ const PaymentAccountPicker: React.FC<Props> = ({
     }
   }, [setSelectedPaymentAccount]);
 
-  useEffect(() => { fetchAccounts(); }, [fetchAccounts]);
+  useEffect(() => { fetchAccounts(); }, [fetchAccounts, preferredCurrency]);
 
   // FIX: Use _id comparison
   const isSelected = (account: PaymentMethodDetail): boolean =>

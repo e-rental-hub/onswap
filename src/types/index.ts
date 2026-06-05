@@ -33,6 +33,7 @@ export type PaymentMethodType =
 export interface PaymentMethodDetail {
   _id:           string;
   type:          PaymentMethodType;
+  currency:      CurrencyEnum;
   label:         string;
   accountName:   string;
   accountNumber: string;

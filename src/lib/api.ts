@@ -35,8 +35,8 @@ export const authApi = {
 // ─── Saved account details ────────────────────────────────────────────────────
 
 export const paymentMethodsApi = {
-  getAll:     () =>
-    apiClient.get<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>('/auth/account-details'),
+  getAll:     (params?: Record<string, string | number>) =>
+    apiClient.get<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>('/auth/account-details', { params }),
   add:        (data: NewPaymentMethodDetail) =>
     apiClient.post<{ success: boolean; userAccountDetails: PaymentMethodDetail[] }>('/auth/account-details', data),
   update:     (pmId: string, data: Partial<NewPaymentMethodDetail>) =>
