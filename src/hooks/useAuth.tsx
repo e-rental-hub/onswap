@@ -12,6 +12,7 @@ import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/ap
 import { logger } from '@/lib/logger';
 import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress, CurrencyEnum } from '@/types';
 import { CURRENCIES } from '@/lib/constants';
+import { onForegroundMessage, registerPushNotifications, unregisterPushNotifications } from '@/lib/pushNotifications';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [preferredCurrency, setPreferredCurrency] = useState<(typeof CURRENCIES)[number]>(CURRENCIES[0]);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notificationToken, setNotificationToken] = useState<string | null>(null);
 
   const currencyFromUser = (u: User | null) =>
     CURRENCIES.find((c) => c.code === u?.preferredCurrency) ?? CURRENCIES[0];
@@ -108,6 +110,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(t);
     setUser(u);
     setPreferredCurrency(currencyFromUser(u));
+    const fcmToken = await registerPushNotifications(u.id);
+    setNotificationToken(fcmToken);
+
+    // ── TEST: trigger a notification immediately after login ──────────
+    if (fcmToken) {
+      await fetch('/notifications/test-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: u.id }),
+      });
+      console.log('[Push] Test notification fired');
+    }
   }, []);
 
   // ── Logout ───────────────────────────────────────────────────────────────────
@@ -116,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       logger.info('Logging out');
       (await authApi.logout()); // clears the httpOnly cookie server-side
+      notificationToken && await unregisterPushNotifications(notificationToken);
     } finally {
       setAuthToken(null);
       setToken(null);
@@ -123,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPreferredCurrency(CURRENCIES[0]);
       window.location.href = '/';
     }
-  }, []);
+  }, [notificationToken]);
 
   // ── Refresh user from server ──────────────────────────────────────────────────
 
