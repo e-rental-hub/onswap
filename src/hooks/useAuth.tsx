@@ -115,11 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // ── TEST: trigger a notification immediately after login ──────────
     if (fcmToken) {
-      await fetch('/notifications/test-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: u.id }),
-      });
+      await authApi.testPushNotification(u.id);
       console.log('[Push] Test notification fired');
     }
   }, []);
