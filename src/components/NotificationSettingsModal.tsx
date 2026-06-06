@@ -132,13 +132,27 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
 
   // ── Detect current permission state on mount ──────────────────────────────
   useEffect(() => {
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      setPermissionState('unsupported');
+    const isPiBrowser = /PiBrowser/i.test(navigator.userAgent);
+
+    // Pi Browser WebView: Notification API absent but SW works
+    if (!("serviceWorker" in navigator)) {
+      setPermissionState("unsupported");
       return;
     }
+
+    if (!("Notification" in window)) {
+      if (isPiBrowser) {
+        // Treat as default — Pi Browser handles permission internally
+        setPermissionState("default");
+      } else {
+        setPermissionState("unsupported");
+      }
+      return;
+    }
+
     const p = Notification.permission as PermissionState;
     setPermissionState(p);
-    setMasterEnabled(p === 'granted');
+    setMasterEnabled(p === "granted");
   }, []);
 
   // ── Enable push notifications ─────────────────────────────────────────────

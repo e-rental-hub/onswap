@@ -32,6 +32,18 @@ function getFirebaseMessaging(): Messaging {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+function isPiBrowser(): boolean {
+  return /PiBrowser/i.test(navigator.userAgent);
+}
+
+function isNotificationSupported(): boolean {
+  // Pi Browser WebView may not expose Notification API
+  // but still supports FCM via service worker + background sync
+  return "serviceWorker" in navigator && (
+    "Notification" in window || isPiBrowser()
+  );
+}
+
 /**
  * Request notification permission, register the service worker, obtain the
  * FCM token, then POST it to your backend.
@@ -41,15 +53,10 @@ function getFirebaseMessaging(): Messaging {
  * @param userId  Your platform user ID (Pi username, DB ObjectId, etc.)
  * @returns       The FCM token, or null if permission was denied.
  */
-export async function registerPushNotifications(userId: string): Promise<string | null> {
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-    logger.warn("[Push] Not supported in this environment");
-    return null;
-  }
 
-  // If already blocked, don't attempt — can't re-prompt programmatically
-  if (Notification.permission === "denied") {
-    logger.warn("[Push] Notifications blocked by user — skipping");
+export async function registerPushNotifications(userId: string): Promise<string | null> {
+  if (!isNotificationSupported()) {
+    logger.warn("[Push] Not supported in this environment");
     return null;
   }
 
@@ -58,6 +65,13 @@ export async function registerPushNotifications(userId: string): Promise<string 
       "/firebase-messaging-sw.js",
       { scope: "/" }
     );
+
+    // On Pi Browser, skip Notification.permission check entirely
+    // — let getToken() handle it internally
+    if (!isPiBrowser() && Notification.permission === "denied") {
+      logger.warn("[Push] Notifications blocked");
+      return null;
+    }
 
     const msg = getFirebaseMessaging();
     const token = await getToken(msg, {
@@ -75,9 +89,10 @@ export async function registerPushNotifications(userId: string): Promise<string 
     return token;
 
   } catch (err: any) {
-    // permission-blocked is expected if user denied — don't treat as a crash
-    if (err?.code === "messaging/permission-blocked" || 
-        err?.code === "messaging/permission-default") {
+    if (
+      err?.code === "messaging/permission-blocked" ||
+      err?.code === "messaging/permission-default"
+    ) {
       logger.warn("[Push] Permission not granted:", err.code);
       return null;
     }
