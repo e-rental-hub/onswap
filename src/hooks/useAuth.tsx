@@ -110,14 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(t);
     setUser(u);
     setPreferredCurrency(currencyFromUser(u));
-    const fcmToken = await registerPushNotifications(u.id);
-    setNotificationToken(fcmToken);
-
-    // ── TEST: trigger a notification immediately after login ──────────
-    if (fcmToken) {
-      await authApi.testPushNotification(u.id);
-      console.log('[Push] Test notification fired');
-    }
   }, []);
 
   // ── Logout ───────────────────────────────────────────────────────────────────

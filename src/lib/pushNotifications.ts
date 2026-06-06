@@ -42,20 +42,14 @@ function getFirebaseMessaging(): Messaging {
  * @returns       The FCM token, or null if permission was denied.
  */
 export async function registerPushNotifications(userId: string): Promise<string | null> {
-  // ── Environment audit ──────────────────────────────────────────────
-  console.log('[Push] Notification in window:', "Notification" in window);
-  console.log('[Push] ServiceWorker in navigator:', "serviceWorker" in navigator);
-  console.log('[Push] Current permission:', Notification.permission);
-  console.log('[Push] User agent:', navigator.userAgent);
-  // ──────────────────────────────────────────────────────────────────
-
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
     logger.warn("[Push] Not supported in this environment");
     return null;
   }
-  
-  if (!("serviceWorker" in navigator)) {
-    logger.warn("[Push] Service workers not supported");
+
+  // If already blocked, don't attempt — can't re-prompt programmatically
+  if (Notification.permission === "denied") {
+    logger.warn("[Push] Notifications blocked by user — skipping");
     return null;
   }
 
@@ -66,25 +60,28 @@ export async function registerPushNotifications(userId: string): Promise<string 
     );
 
     const msg = getFirebaseMessaging();
-
-    // Let Firebase handle the permission request internally —
-    // getToken() will trigger the prompt if needed
     const token = await getToken(msg, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: registration,
     });
 
     if (!token) {
-      console.warn("[Push] No token returned — permission likely denied by WebView");
+      logger.warn("[Push] No token returned");
       return null;
     }
 
     await notificationsApi.saveTokenToServer(userId, token);
-    console.info("[Push] Registered ✓");
+    logger.info("[Push] Registered ✓");
     return token;
 
-  } catch (err) {
-    console.error("[Push] Registration failed:", err);
+  } catch (err: any) {
+    // permission-blocked is expected if user denied — don't treat as a crash
+    if (err?.code === "messaging/permission-blocked" || 
+        err?.code === "messaging/permission-default") {
+      logger.warn("[Push] Permission not granted:", err.code);
+      return null;
+    }
+    logger.error("[Push] Registration failed:", err);
     return null;
   }
 }

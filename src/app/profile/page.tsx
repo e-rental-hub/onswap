@@ -7,25 +7,13 @@ import { WalletCard } from '@/components/p2p/WalletCard';
 import { CurrencyEnum, PAYMENT_METHOD_LABELS, PaymentMethodDetail, WalletSummary } from '@/types';
 import { useToast } from '@/hooks/useToast';
 import { logger } from '@/lib/logger';
-import { walletApi } from '@/lib/api';
+import { authApi, walletApi } from '@/lib/api';
 import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
 import PaymentAccountPicker from '@/components/p2p/paymentAccountPicker';
 import BottomNav from '@/components/layout/BottomNav';
 import PiWalletPicker from '@/components/p2p/PiWalletAddressPicker';
 import { CurrencyModal } from '@/components/CurrencyModal';
-
-// ── mock user – replace with your auth context ──────────────────────────────
-const MOCK_USER = {
-  displayName: 'Chukwuemeka O.',
-  username: '@chukspi',
-  piUid: 'PI-8821-XXXX',
-  avatarInitials: 'CO',
-  completedTrades: 47,
-  rating: 4.9,
-  memberSince: 'Jan 2024',
-  verifiedKyc: true,
-  piBalance: 320.5,
-};
+import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 
 // ── types ────────────────────────────────────────────────────────────────────
 type MenuSection = {
@@ -175,6 +163,7 @@ export default function ProfilePage() {
   const [selectedSellerAccount, setSelectedSellerAccount] = useState<PaymentMethodDetail | null>(null);
   const [selectedPiWalletId, setSelectedPiWalletId] = useState<string | null>(null);
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+  const [showNotification, setShowNotification] = useState<boolean>(false)
 
   const u = {
     displayName: user?.displayName || user?.username,
@@ -189,7 +178,7 @@ export default function ProfilePage() {
     preferredCurrency: CURRENCIES.find(c => c.code === user?.preferredCurrency)?.label || 'Set your currency',
   }
 
-  // ── Loaders ──────────────────────────────────────────────────────────────── 
+  // ── Loaders ─────────── ───────────────────────────────────────────────────── 
   const loadWallet = useCallback(async () => {
     try {
       const r = await walletApi.getBalance();
@@ -378,21 +367,45 @@ export default function ProfilePage() {
         />
 
         {/* Currency picker button */}
-          <button
-            onClick={() => setShowCurrencyModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              padding: '10px 16px', borderRadius: '14px', cursor: 'pointer',
-              background: 'var(--bg-card)', border: '1px solid var(--border)',
-              transition: 'border-color 0.15s',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-          >
-            <span style={{ fontSize: '20px' }}>{preferredCurrency.flag}</span>
-            <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{preferredCurrency.code}</span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
-          </button>
+        <button
+          onClick={() => setShowCurrencyModal(true)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 16px', borderRadius: '14px', cursor: 'pointer',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            transition: 'border-color 0.15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+        >
+          <span style={{ fontSize: '20px' }}>{preferredCurrency.flag}</span>
+          <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{preferredCurrency.code}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
+        </button>
+
+        <button
+          onClick={() => setShowNotification(true)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 16px', borderRadius: '14px', cursor: 'pointer',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            transition: 'border-color 0.15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+        >
+          <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>Notification settings</span>
+        </button>
+
+        <button 
+          onClick={async () => {    
+              await authApi.testPushNotification(user.id);
+              logger.info('[Push] Test notification fired');
+            }
+          } 
+        >
+          test push notifications
+        </button>
 
         {sections.map((section) => (
           <div key={section.title} style={{ marginBottom: '24px' }}>
@@ -511,6 +524,10 @@ export default function ProfilePage() {
         <CurrencyModal
           onClose={() => setShowCurrencyModal(false)}
         />
+      )}
+      
+      {showNotification && (
+        <NotificationSettingsModal onClose={() => setShowNotification(false)} />
       )}
       <BottomNav />
     </div>
