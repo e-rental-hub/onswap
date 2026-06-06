@@ -4,6 +4,7 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { notificationsApi } from "./api";
+import { logger } from "./logger";
 
 // ─── Firebase config (use env vars / build-time injection) ────────────────────
 
@@ -41,40 +42,51 @@ function getFirebaseMessaging(): Messaging {
  * @returns       The FCM token, or null if permission was denied.
  */
 export async function registerPushNotifications(userId: string): Promise<string | null> {
-  // Pi Browser runs on Chromium — Notification API is available
+  // ── Environment audit ──────────────────────────────────────────────
+  console.log('[Push] Notification in window:', "Notification" in window);
+  console.log('[Push] ServiceWorker in navigator:', "serviceWorker" in navigator);
+  console.log('[Push] Current permission:', Notification.permission);
+  console.log('[Push] User agent:', navigator.userAgent);
+  // ──────────────────────────────────────────────────────────────────
+
   if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-    console.warn("[Push] Not supported in this environment");
+    logger.warn("[Push] Not supported in this environment");
+    return null;
+  }
+  
+  if (!("serviceWorker" in navigator)) {
+    logger.warn("[Push] Service workers not supported");
     return null;
   }
 
-  // 1. Request permission
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
-    console.info("[Push] Permission denied");
-    alert("Push notifications permission was denied. You can enable it in your browser settings if you change your mind.");
+  try {
+    const registration = await navigator.serviceWorker.register(
+      "/firebase-messaging-sw.js",
+      { scope: "/" }
+    );
+
+    const msg = getFirebaseMessaging();
+
+    // Let Firebase handle the permission request internally —
+    // getToken() will trigger the prompt if needed
+    const token = await getToken(msg, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration,
+    });
+
+    if (!token) {
+      console.warn("[Push] No token returned — permission likely denied by WebView");
+      return null;
+    }
+
+    await notificationsApi.saveTokenToServer(userId, token);
+    console.info("[Push] Registered ✓");
+    return token;
+
+  } catch (err) {
+    console.error("[Push] Registration failed:", err);
     return null;
   }
-
-  // 2. Register service worker
-  const registration = await navigator.serviceWorker.register(
-    "/firebase-messaging-sw.js",
-    { scope: "/" }
-  );
-
-  // 3. Get FCM token
-  const msg = getFirebaseMessaging();
-  const token = await getToken(msg, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
-
-  if (!token) {
-    console.error("[Push] Failed to obtain FCM token");
-    return null;
-  }
-
-  // 4. Send token to backend
-  await notificationsApi.saveTokenToServer(userId, token);
-
-  console.info("[Push] Registered ✓", token.slice(0, 12) + "…");
-  return token;
 }
 
 /**
