@@ -138,3 +138,15 @@ export const payment = {
     apiClient.post('/wallet/deposit/incomplete', data),
   error: (_data: { paymentInfo: PaymentInfo }) => Promise.resolve(), // client-side only
 };
+
+
+// ─── Notifications ─────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  testPushNotification: (userId: string) =>
+    apiClient.post('/notifications/test-login', { userId }),
+  unregisterPushNotifications: (fcmToken: string) =>
+    apiClient.delete('/notifications/token', { data: { fcmToken } }),
+  saveTokenToServer: (userId: string, fcmToken: string) =>
+    apiClient.post('/notifications/token', { userId, fcmToken, platform: 'web' }),
+};

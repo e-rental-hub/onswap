@@ -8,11 +8,11 @@ import {
   useEffect,
   useRef,
 } from 'react';
-import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
+import { authApi, notificationsApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress, CurrencyEnum } from '@/types';
 import { CURRENCIES } from '@/lib/constants';
-import { onForegroundMessage, registerPushNotifications, unregisterPushNotifications } from '@/lib/pushNotifications';
+import { registerPushNotifications } from '@/lib/pushNotifications';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       logger.info('Logging out');
       (await authApi.logout()); // clears the httpOnly cookie server-side
-      notificationToken && await unregisterPushNotifications(notificationToken);
+      notificationToken && await notificationsApi.unregisterPushNotifications(notificationToken);
     } finally {
       setAuthToken(null);
       setToken(null);

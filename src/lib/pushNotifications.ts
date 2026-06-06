@@ -3,6 +3,7 @@
 
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
+import { notificationsApi } from "./api";
 
 // ─── Firebase config (use env vars / build-time injection) ────────────────────
 
@@ -50,6 +51,7 @@ export async function registerPushNotifications(userId: string): Promise<string 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
     console.info("[Push] Permission denied");
+    alert("Push notifications permission was denied. You can enable it in your browser settings if you change your mind.");
     return null;
   }
 
@@ -69,7 +71,7 @@ export async function registerPushNotifications(userId: string): Promise<string 
   }
 
   // 4. Send token to backend
-  await saveTokenToServer(userId, token);
+  await notificationsApi.saveTokenToServer(userId, token);
 
   console.info("[Push] Registered ✓", token.slice(0, 12) + "…");
   return token;
@@ -98,25 +100,25 @@ export function onForegroundMessage(
 /**
  * Remove the FCM token from the backend (call on logout).
  */
-export async function unregisterPushNotifications(fcmToken: string): Promise<void> {
-  await fetch("/notifications/token", {
-    method:  "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ fcmToken }),
-  });
-}
+// export async function unregisterPushNotifications(fcmToken: string): Promise<void> {
+//   await fetch("/notifications/token", {
+//     method:  "DELETE",
+//     headers: { "Content-Type": "application/json" },
+//     body:    JSON.stringify({ fcmToken }),
+//   });
+// }
 
 // ─── Internal ─────────────────────────────────────────────────────────────────
 
-async function saveTokenToServer(userId: string, fcmToken: string): Promise<void> {
-  const res = await fetch("/notifications/token", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ userId, fcmToken, platform: "web" }),
-  });
+// async function saveTokenToServer(userId: string, fcmToken: string): Promise<void> {
+//   const res = await fetch("/notifications/token", {
+//     method:  "POST",
+//     headers: { "Content-Type": "application/json" },
+//     body:    JSON.stringify({ userId, fcmToken, platform: "web" }),
+//   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`[Push] Token save failed: ${err}`);
-  }
-}
+//   if (!res.ok) {
+//     const err = await res.text();
+//     throw new Error(`[Push] Token save failed: ${err}`);
+//   }
+// }
