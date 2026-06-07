@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { registerPushNotifications, getEnvironmentInfo, EnvironmentInfo } from '@/lib/pushNotifications';
+import { registerPushNotifications, getEnvironmentInfo, PushSupport } from '@/lib/pushNotifications';
 import { logger } from '@/lib/logger';
 import { notificationsApi } from '@/lib/api';
 
@@ -10,7 +10,6 @@ interface NotificationSettingsModalProps {
 }
 
 type PermissionState = 'granted' | 'denied' | 'default' | 'unsupported';
-type UnsupportedReason = 'ios-webview' | 'no-sw' | null;
 
 interface NotificationItem {
   id: string;
@@ -25,6 +24,54 @@ const NOTIFICATION_TYPES: NotificationItem[] = [
   { id: 'messages',   label: 'New Messages',     description: 'Messages from buyers, sellers, and support',    icon: '💬' },
   { id: 'promotions', label: 'Platform Updates', description: 'New features, announcements, and promos',       icon: '📣' },
 ];
+
+// ─── Unsupported message map ──────────────────────────────────────────────────
+
+function UnsupportedBanner({ support }: { support: PushSupport | null }) {
+  if (support === 'android-webview') return (
+    <div
+      className="rounded-xl p-4 mb-4 text-sm"
+      style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}
+    >
+      <p className="font-medium mb-1" style={{ color: '#fbbf24' }}>
+        Limited support in Pi Browser (Android)
+      </p>
+      <p style={{ color: 'var(--text-muted)' }}>
+        Android's Pi Browser WebView does not expose the Notification API needed
+        for web push. To receive alerts, open this site in{' '}
+        <strong>Chrome for Android</strong> instead.
+      </p>
+    </div>
+  );
+
+  if (support === 'ios-webview') return (
+    <div
+      className="rounded-xl p-4 mb-4 text-sm"
+      style={{ background: 'rgba(100,100,100,0.1)', border: '1px solid var(--border)' }}
+    >
+      <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+        Not available in Pi Browser on iPhone
+      </p>
+      <p style={{ color: 'var(--text-muted)' }}>
+        Apple restricts web push to Safari only. Open this app in{' '}
+        <strong>Safari</strong>, tap the Share button, select{' '}
+        <strong>"Add to Home Screen"</strong>, then enable notifications
+        from your Home Screen app.
+      </p>
+    </div>
+  );
+
+  return (
+    <div
+      className="rounded-xl p-4 mb-4 text-sm"
+      style={{ background: 'rgba(100,100,100,0.1)', border: '1px solid var(--border)' }}
+    >
+      <p style={{ color: 'var(--text-muted)' }}>
+        Push notifications are not supported in this environment.
+      </p>
+    </div>
+  );
+}
 
 // ─── Toggle row ───────────────────────────────────────────────────────────────
 
@@ -90,42 +137,26 @@ function NotificationRow({
 export function NotificationSettingsModal({ onClose }: NotificationSettingsModalProps) {
   const { user } = useAuth();
 
-  const [permissionState,   setPermissionState]   = useState<PermissionState>('default');
-  const [unsupportedReason, setUnsupportedReason] = useState<UnsupportedReason>(null);
-  const [masterEnabled,     setMasterEnabled]     = useState(false);
-  const [fcmToken,          setFcmToken]          = useState<string | null>(null);
-  const [loading,           setLoading]           = useState(false);
-  const [envInfo,           setEnvInfo]           = useState<EnvironmentInfo | null>(null);
-  const [preferences, setPreferences] = useState<Record<string, boolean>>(
+  const [support,       setSupport]       = useState<PushSupport | null>(null);
+  const [permState,     setPermState]     = useState<PermissionState>('default');
+  const [masterEnabled, setMasterEnabled] = useState(false);
+  const [fcmToken,      setFcmToken]      = useState<string | null>(null);
+  const [loading,       setLoading]       = useState(false);
+  const [preferences, setPreferences]     = useState<Record<string, boolean>>(
     () => Object.fromEntries(NOTIFICATION_TYPES.map((n) => [n.id, true]))
   );
 
-  // ── Detect environment on mount ───────────────────────────────────────────
+  // ── Detect on mount ───────────────────────────────────────────────────────
   useEffect(() => {
     const env = getEnvironmentInfo();
-    setEnvInfo(env);
-    console.log('[NotifModal] env:', JSON.stringify(env, null, 2));
+    setSupport(env.support);
 
-    if (!env.hasServiceWorker) {
-      setPermissionState('unsupported');
-      setUnsupportedReason('no-sw');
+    if (env.support !== 'supported') {
+      setPermState('unsupported');
       return;
     }
 
-    if (env.isIOSWebView) {
-      setPermissionState('unsupported');
-      setUnsupportedReason('ios-webview');
-      return;
-    }
-
-    // No Notification API (common on Android WebView) —
-    // treat as 'default' so the user can tap to attempt getToken()
-    if (!env.hasNotificationAPI) {
-      setPermissionState('default');
-      return;
-    }
-
-    setPermissionState(env.notificationPermission);
+    setPermState(env.notificationPermission);
     setMasterEnabled(env.notificationPermission === 'granted');
   }, []);
 
@@ -135,22 +166,15 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
     setLoading(true);
     try {
       const token = await registerPushNotifications(user.id);
-
       if (token) {
         setFcmToken(token);
         setMasterEnabled(true);
-        setPermissionState('granted');
-        return;
+        setPermState('granted');
+      } else {
+        // Reflect real permission state after the prompt
+        const env = getEnvironmentInfo();
+        if (env.hasNotificationAPI) setPermState(env.notificationPermission);
       }
-
-      // Token was null — re-read env to show the right state
-      const env = getEnvironmentInfo();
-      if (env.hasNotificationAPI) {
-        // Notification API exists — reflect what the user chose in the prompt
-        setPermissionState(env.notificationPermission);
-      }
-      // If no Notification API (Android WebView), leave as 'default' so
-      // the user can tap again — don't lock them out
     } catch (err) {
       logger.error('[NotificationModal] Enable failed:', err);
     } finally {
@@ -173,12 +197,11 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
   }, [fcmToken]);
 
   const handleMasterToggle = () => masterEnabled ? handleDisable() : handleEnable();
-
-  const handlePrefChange = (id: string, val: boolean) =>
+  const handlePrefChange   = (id: string, val: boolean) =>
     setPreferences((prev) => ({ ...prev, [id]: val }));
 
-  const isBlocked     = permissionState === 'denied';
-  const isUnsupported = permissionState === 'unsupported';
+  const isBlocked     = permState === 'denied';
+  const isUnsupported = permState === 'unsupported';
 
   return (
     <div
@@ -220,33 +243,10 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
           </div>
         )}
 
-        {/* Unsupported banner */}
-        {isUnsupported && (
-          <div
-            className="rounded-xl p-4 mb-4 text-sm"
-            style={{ background: 'rgba(100,100,100,0.1)', border: '1px solid var(--border)' }}
-          >
-            {unsupportedReason === 'ios-webview' ? (
-              <>
-                <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-                  Not available in Pi Browser on iPhone
-                </p>
-                <p style={{ color: 'var(--text-muted)' }}>
-                  Apple restricts web push to Safari only. Open this app in{' '}
-                  <strong>Safari</strong>, tap the Share button, and select{' '}
-                  <strong>"Add to Home Screen"</strong> — then enable notifications
-                  from your Home Screen app.
-                </p>
-              </>
-            ) : (
-              <p style={{ color: 'var(--text-muted)' }}>
-                Push notifications are not supported in this environment.
-              </p>
-            )}
-          </div>
-        )}
+        {/* Unsupported banner — shows correct message per platform */}
+        {isUnsupported && <UnsupportedBanner support={support} />}
 
-        {/* Master toggle */}
+        {/* Master toggle — only shown when push is actually possible */}
         {!isUnsupported && (
           <div
             className="flex items-center justify-between rounded-xl p-4 mb-4"
@@ -268,7 +268,6 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
                   : 'Tap to allow notifications on this device'}
               </p>
             </div>
-
             <button
               type="button"
               disabled={loading || isBlocked}
