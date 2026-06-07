@@ -213,35 +213,6 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
   const isBlocked = permissionState === 'denied';
   const isUnsupported = permissionState === 'unsupported';
 
-  // Replace the unsupported banner JSX:
-  {isUnsupported && (
-    <div
-      className="rounded-xl p-4 mb-4 text-sm"
-      style={{
-        background: 'rgba(100,100,100,0.1)',
-        border: '1px solid var(--border)',
-      }}
-    >
-      {unsupportedReason === 'ios-webview' ? (
-        <>
-          <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-            Not available in Pi Browser on iPhone
-          </p>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Apple restricts web push to Safari only. To receive notifications,
-            open this app in <strong>Safari</strong>, tap the Share button, and
-            select <strong>"Add to Home Screen"</strong> — then enable
-            notifications from your Home Screen app.
-          </p>
-        </>
-      ) : (
-        <p style={{ color: 'var(--text-muted)' }}>
-          Push notifications are not supported in this environment.
-        </p>
-      )}
-    </div>
-  )}
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
