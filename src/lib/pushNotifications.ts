@@ -1,7 +1,9 @@
 // src/lib/pushNotifications.ts
 
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
+// ✅ Import getToken from the correct modular subpath — fixes the deprecated overload warning
+import { getMessaging, onMessage, Messaging } from "firebase/messaging";
+import { getToken } from "firebase/messaging";
 import { notificationsApi } from "./api";
 import { logger } from "./logger";
 
@@ -27,38 +29,45 @@ function getFirebaseMessaging(): Messaging {
 
 // ─── Environment detection ────────────────────────────────────────────────────
 
-export function getEnvironmentInfo() {
+export interface EnvironmentInfo {
+  ua: string;
+  hasServiceWorker: boolean;
+  hasNotificationAPI: boolean;
+  notificationPermission: 'granted' | 'denied' | 'default';
+  isIOS: boolean;
+  isIOSWebView: boolean;
+  isAndroid: boolean;
+  isAndroidWebView: boolean;
+}
+
+export function getEnvironmentInfo(): EnvironmentInfo {
   const ua = navigator.userAgent;
 
-  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isIOS     = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
 
-  // Pi Browser on iOS uses WKWebView — it includes "Safari/" in the UA just
-  // like mobile Safari, but it is NOT Safari. The reliable signal is the
-  // absence of "Version/X.X" which real Mobile Safari always includes.
-  // Pi Browser / other WKWebViews typically omit it OR include "PiBrowser".
+  // Real Mobile Safari always includes "Version/X.X" — WKWebView / Pi Browser omit it
+  // Also catch explicit PiBrowser token just in case
   const isIOSWebView =
-    isIOS &&
-    (
-      /PiBrowser/i.test(ua) ||
-      !/Version\/[\d.]+/.test(ua)   // real Mobile Safari always has Version/X.X
-    );
+    isIOS && (/PiBrowser/i.test(ua) || !/Version\/[\d.]+/.test(ua));
 
-  // Android WebView carries the "wv" token
-  const isAndroidWebView = !isIOS && /wv/.test(ua);
+  // Android WebView carries the "wv" token per Google's spec
+  const isAndroidWebView = isAndroid && /\bwv\b/.test(ua);
 
-  // Whether the Notification API is available at all
   const hasNotificationAPI = typeof Notification !== 'undefined';
 
   return {
-    hasServiceWorker:   'serviceWorker' in navigator,
+    ua,
+    hasServiceWorker:      'serviceWorker' in navigator,
     hasNotificationAPI,
-    isIOS,
-    isIOSWebView,
-    isAndroidWebView,
-    // Current browser permission — safe to read (falls back to 'default')
+    // Safe read — never throws
     notificationPermission: hasNotificationAPI
       ? (Notification.permission as 'granted' | 'denied' | 'default')
-      : 'default' as const,
+      : 'default',
+    isIOS,
+    isIOSWebView,
+    isAndroid,
+    isAndroidWebView,
   };
 }
 
@@ -67,8 +76,8 @@ export function getEnvironmentInfo() {
 export async function registerPushNotifications(userId: string): Promise<string | null> {
   const env = getEnvironmentInfo();
 
-  console.log('[Push] Environment:', env);
-  console.log('[Push] UA:', navigator.userAgent);
+  // Always log — helps debug across devices
+  console.log('[Push] env:', JSON.stringify(env, null, 2));
 
   if (!env.hasServiceWorker) {
     logger.warn('[Push] Service workers not supported');
@@ -80,7 +89,7 @@ export async function registerPushNotifications(userId: string): Promise<string 
     return null;
   }
 
-  // Only hard-block if the API exists AND is explicitly denied
+  // Only hard-block when the API exists AND is explicitly denied
   if (env.hasNotificationAPI && env.notificationPermission === 'denied') {
     logger.warn('[Push] Notifications blocked by user');
     return null;
@@ -91,20 +100,22 @@ export async function registerPushNotifications(userId: string): Promise<string 
       '/firebase-messaging-sw.js',
       { scope: '/' }
     );
+    console.log('[Push] SW registered:', registration.scope);
 
     const msg   = getFirebaseMessaging();
+    // ✅ Pass messaging instance as first arg — this is the non-deprecated signature
     const token = await getToken(msg, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: registration,
     });
 
     if (!token) {
-      logger.warn('[Push] No token returned');
+      logger.warn('[Push] No token returned — user likely denied the prompt');
       return null;
     }
 
     await notificationsApi.saveTokenToServer(userId, token);
-    logger.info('[Push] Registered ✓');
+    logger.info('[Push] Registered ✓', token.slice(0, 12) + '…');
     return token;
 
   } catch (err: any) {

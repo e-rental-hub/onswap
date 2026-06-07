@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { registerPushNotifications, getEnvironmentInfo } from '@/lib/pushNotifications';
+import { registerPushNotifications, getEnvironmentInfo, EnvironmentInfo } from '@/lib/pushNotifications';
 import { logger } from '@/lib/logger';
 import { notificationsApi } from '@/lib/api';
 
@@ -20,10 +20,10 @@ interface NotificationItem {
 }
 
 const NOTIFICATION_TYPES: NotificationItem[] = [
-  { id: 'payments',   label: 'Payment Alerts',   description: 'Incoming and outgoing Pi payment notifications',   icon: '₿'  },
-  { id: 'orders',     label: 'Order Updates',     description: 'Status changes on your buy and sell orders',       icon: '📦' },
-  { id: 'messages',   label: 'New Messages',      description: 'Messages from buyers, sellers, and support',       icon: '💬' },
-  { id: 'promotions', label: 'Platform Updates',  description: 'New features, announcements, and promos',          icon: '📣' },
+  { id: 'payments',   label: 'Payment Alerts',  description: 'Incoming and outgoing Pi payment notifications', icon: '₿'  },
+  { id: 'orders',     label: 'Order Updates',    description: 'Status changes on your buy and sell orders',    icon: '📦' },
+  { id: 'messages',   label: 'New Messages',     description: 'Messages from buyers, sellers, and support',    icon: '💬' },
+  { id: 'promotions', label: 'Platform Updates', description: 'New features, announcements, and promos',       icon: '📣' },
 ];
 
 // ─── Toggle row ───────────────────────────────────────────────────────────────
@@ -41,8 +41,8 @@ function NotificationRow({
       className="flex items-center justify-between rounded-xl p-3"
       style={{
         background: enabled && masterEnabled ? 'rgba(240,160,60,0.06)' : 'var(--bg-elevated)',
-        border: `1px solid ${enabled && masterEnabled ? 'rgba(240,160,60,0.25)' : 'var(--border)'}`,
-        opacity: masterEnabled ? 1 : 0.45,
+        border:     `1px solid ${enabled && masterEnabled ? 'rgba(240,160,60,0.25)' : 'var(--border)'}`,
+        opacity:    masterEnabled ? 1 : 0.45,
         transition: 'all 0.2s ease',
       }}
     >
@@ -58,7 +58,6 @@ function NotificationRow({
           <p className="text-xs mt-0.5"      style={{ color: 'var(--text-muted)'   }}>{item.description}</p>
         </div>
       </div>
-
       <button
         type="button"
         disabled={!masterEnabled}
@@ -67,10 +66,10 @@ function NotificationRow({
         role="checkbox"
         className="flex-shrink-0 w-11 h-6 rounded-full relative focus:outline-none"
         style={{
-          background:  enabled && masterEnabled ? 'var(--pi-gold)' : 'var(--bg-card)',
-          border:      `1.5px solid ${enabled && masterEnabled ? 'var(--pi-gold)' : 'var(--border)'}`,
-          cursor:      masterEnabled ? 'pointer' : 'not-allowed',
-          transition:  'background 0.2s, border-color 0.2s',
+          background: enabled && masterEnabled ? 'var(--pi-gold)' : 'var(--bg-card)',
+          border:     `1.5px solid ${enabled && masterEnabled ? 'var(--pi-gold)' : 'var(--border)'}`,
+          cursor:     masterEnabled ? 'pointer' : 'not-allowed',
+          transition: 'background 0.2s, border-color 0.2s',
         }}
       >
         <span
@@ -96,6 +95,7 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
   const [masterEnabled,     setMasterEnabled]     = useState(false);
   const [fcmToken,          setFcmToken]          = useState<string | null>(null);
   const [loading,           setLoading]           = useState(false);
+  const [envInfo,           setEnvInfo]           = useState<EnvironmentInfo | null>(null);
   const [preferences, setPreferences] = useState<Record<string, boolean>>(
     () => Object.fromEntries(NOTIFICATION_TYPES.map((n) => [n.id, true]))
   );
@@ -103,9 +103,8 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
   // ── Detect environment on mount ───────────────────────────────────────────
   useEffect(() => {
     const env = getEnvironmentInfo();
-
-    console.log('[NotifModal] env:', env);
-    console.log('[NotifModal] UA:', navigator.userAgent);
+    setEnvInfo(env);
+    console.log('[NotifModal] env:', JSON.stringify(env, null, 2));
 
     if (!env.hasServiceWorker) {
       setPermissionState('unsupported');
@@ -119,8 +118,8 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
       return;
     }
 
-    // Android WebView or any env where Notification API is absent:
-    // treat as 'default' — let getToken() attempt it on tap
+    // No Notification API (common on Android WebView) —
+    // treat as 'default' so the user can tap to attempt getToken()
     if (!env.hasNotificationAPI) {
       setPermissionState('default');
       return;
@@ -136,19 +135,22 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
     setLoading(true);
     try {
       const token = await registerPushNotifications(user.id);
+
       if (token) {
         setFcmToken(token);
         setMasterEnabled(true);
         setPermissionState('granted');
-      } else {
-        // Re-read permission safely — API may not exist on Android WebView
-        const env = getEnvironmentInfo();
-        if (env.hasNotificationAPI) {
-          setPermissionState(env.notificationPermission);
-        }
-        // If still no token and no explicit denial, leave as 'default'
-        // so the user can try again
+        return;
       }
+
+      // Token was null — re-read env to show the right state
+      const env = getEnvironmentInfo();
+      if (env.hasNotificationAPI) {
+        // Notification API exists — reflect what the user chose in the prompt
+        setPermissionState(env.notificationPermission);
+      }
+      // If no Notification API (Android WebView), leave as 'default' so
+      // the user can tap again — don't lock them out
     } catch (err) {
       logger.error('[NotificationModal] Enable failed:', err);
     } finally {
@@ -212,8 +214,8 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
           >
             <p className="font-medium mb-1" style={{ color: '#f87171' }}>Notifications are blocked</p>
             <p style={{ color: 'var(--text-muted)' }}>
-              Open your browser settings, find this site under Notifications, and set it to{' '}
-              <strong>Allow</strong> to enable push alerts.
+              Open your browser settings, find this site under Notifications,
+              and set it to <strong>Allow</strong> to enable push alerts.
             </p>
           </div>
         )}
@@ -316,7 +318,7 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
         <button
           type="button"
           onClick={onClose}
-          className="w-full rounded-xl py-3 text-sm font-medium transition-all"
+          className="w-full rounded-xl py-3 text-sm font-medium"
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
         >
           Done
