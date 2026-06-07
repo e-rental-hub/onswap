@@ -1,12 +1,9 @@
 // src/lib/pushNotifications.ts
-// Works inside Pi Browser (Chromium-based WebView with PWA/SW support).
 
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { notificationsApi } from "./api";
 import { logger } from "./logger";
-
-// ─── Firebase config (use env vars / build-time injection) ────────────────────
 
 const firebaseConfig = {
   apiKey:            process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,8 +16,6 @@ const firebaseConfig = {
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
 
-// ─── Singleton setup ──────────────────────────────────────────────────────────
-
 let app: FirebaseApp;
 let messaging: Messaging;
 
@@ -30,60 +25,64 @@ function getFirebaseMessaging(): Messaging {
   return messaging;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Environment detection ────────────────────────────────────────────────────
 
-function isPiBrowser(): boolean {
-  return /PiBrowser/i.test(navigator.userAgent);
-}
+export function getEnvironmentInfo() {
+  const ua = navigator.userAgent;
 
-function getEnvironmentInfo() {
-  const ua       = navigator.userAgent;
-  const isIOS    = /iPhone|iPad|iPod/i.test(ua);
-  // wv = Android WebView token; also catch Pi Browser which may not say PiBrowser
-  const isAndroidWebView = /wv/.test(ua) || (/Android/i.test(ua) && !/Chrome\/[0-9]/.test(ua));
-  const isIOSWebView = isIOS && !(/Safari\//.test(ua));
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+  // Pi Browser on iOS uses WKWebView — it includes "Safari/" in the UA just
+  // like mobile Safari, but it is NOT Safari. The reliable signal is the
+  // absence of "Version/X.X" which real Mobile Safari always includes.
+  // Pi Browser / other WKWebViews typically omit it OR include "PiBrowser".
+  const isIOSWebView =
+    isIOS &&
+    (
+      /PiBrowser/i.test(ua) ||
+      !/Version\/[\d.]+/.test(ua)   // real Mobile Safari always has Version/X.X
+    );
+
+  // Android WebView carries the "wv" token
+  const isAndroidWebView = !isIOS && /wv/.test(ua);
+
+  // Whether the Notification API is available at all
+  const hasNotificationAPI = typeof Notification !== 'undefined';
 
   return {
-    hasServiceWorker:  'serviceWorker' in navigator,
-    hasNotificationAPI: 'Notification' in window,
+    hasServiceWorker:   'serviceWorker' in navigator,
+    hasNotificationAPI,
     isIOS,
     isIOSWebView,
     isAndroidWebView,
+    // Current browser permission — safe to read (falls back to 'default')
+    notificationPermission: hasNotificationAPI
+      ? (Notification.permission as 'granted' | 'denied' | 'default')
+      : 'default' as const,
   };
 }
 
-/**
- * Request notification permission, register the service worker, obtain the
- * FCM token, then POST it to your backend.
- *
- * Call this after the user logs in (Pi SDK auth completes).
- *
- * @param userId  Your platform user ID (Pi username, DB ObjectId, etc.)
- * @returns       The FCM token, or null if permission was denied.
- */
+// ─── Register ─────────────────────────────────────────────────────────────────
 
 export async function registerPushNotifications(userId: string): Promise<string | null> {
   const env = getEnvironmentInfo();
 
-  // Log for debugging — remove after confirmed working
   console.log('[Push] Environment:', env);
-  console.log('[Push] User agent:', navigator.userAgent);
+  console.log('[Push] UA:', navigator.userAgent);
 
   if (!env.hasServiceWorker) {
     logger.warn('[Push] Service workers not supported');
     return null;
   }
 
-  // iOS WebView can never do web push — bail early
   if (env.isIOSWebView) {
     logger.warn('[Push] iOS WebView — push not supported');
     return null;
   }
 
-  // Skip Notification.permission check on Android WebView —
-  // it may not expose the API but FCM via SW can still work
-  if (env.hasNotificationAPI && Notification.permission === 'denied') {
-    logger.warn('[Push] Notifications blocked');
+  // Only hard-block if the API exists AND is explicitly denied
+  if (env.hasNotificationAPI && env.notificationPermission === 'denied') {
+    logger.warn('[Push] Notifications blocked by user');
     return null;
   }
 
@@ -121,48 +120,17 @@ export async function registerPushNotifications(userId: string): Promise<string 
   }
 }
 
-/**
- * Listen for foreground messages (app is open).
- * Typically you'd show an in-app toast instead of a system notification.
- *
- * @param onReceive  Callback invoked with { title, body, data }
- * @returns          Unsubscribe function
- */
+// ─── Foreground listener ──────────────────────────────────────────────────────
+
 export function onForegroundMessage(
   onReceive: (msg: { title: string; body: string; data?: Record<string, string> }) => void
 ): () => void {
   const msg = getFirebaseMessaging();
   return onMessage(msg, (payload) => {
     onReceive({
-      title: payload.notification?.title ?? "",
-      body:  payload.notification?.body  ?? "",
+      title: payload.notification?.title ?? '',
+      body:  payload.notification?.body  ?? '',
       data:  payload.data as Record<string, string> | undefined,
     });
   });
 }
-
-/**
- * Remove the FCM token from the backend (call on logout).
- */
-// export async function unregisterPushNotifications(fcmToken: string): Promise<void> {
-//   await fetch("/notifications/token", {
-//     method:  "DELETE",
-//     headers: { "Content-Type": "application/json" },
-//     body:    JSON.stringify({ fcmToken }),
-//   });
-// }
-
-// ─── Internal ─────────────────────────────────────────────────────────────────
-
-// async function saveTokenToServer(userId: string, fcmToken: string): Promise<void> {
-//   const res = await fetch("/notifications/token", {
-//     method:  "POST",
-//     headers: { "Content-Type": "application/json" },
-//     body:    JSON.stringify({ userId, fcmToken, platform: "web" }),
-//   });
-
-//   if (!res.ok) {
-//     const err = await res.text();
-//     throw new Error(`[Push] Token save failed: ${err}`);
-//   }
-// }
