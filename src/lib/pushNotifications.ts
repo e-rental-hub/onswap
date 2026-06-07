@@ -36,12 +36,20 @@ function isPiBrowser(): boolean {
   return /PiBrowser/i.test(navigator.userAgent);
 }
 
-function isNotificationSupported(): boolean {
-  // Pi Browser WebView may not expose Notification API
-  // but still supports FCM via service worker + background sync
-  return "serviceWorker" in navigator && (
-    "Notification" in window || isPiBrowser()
-  );
+function getEnvironmentInfo() {
+  const ua       = navigator.userAgent;
+  const isIOS    = /iPhone|iPad|iPod/i.test(ua);
+  // wv = Android WebView token; also catch Pi Browser which may not say PiBrowser
+  const isAndroidWebView = /wv/.test(ua) || (/Android/i.test(ua) && !/Chrome\/[0-9]/.test(ua));
+  const isIOSWebView = isIOS && !(/Safari\//.test(ua));
+
+  return {
+    hasServiceWorker:  'serviceWorker' in navigator,
+    hasNotificationAPI: 'Notification' in window,
+    isIOS,
+    isIOSWebView,
+    isAndroidWebView,
+  };
 }
 
 /**
@@ -55,48 +63,60 @@ function isNotificationSupported(): boolean {
  */
 
 export async function registerPushNotifications(userId: string): Promise<string | null> {
-  if (!isNotificationSupported()) {
-    logger.warn("[Push] Not supported in this environment");
+  const env = getEnvironmentInfo();
+
+  // Log for debugging — remove after confirmed working
+  console.log('[Push] Environment:', env);
+  console.log('[Push] User agent:', navigator.userAgent);
+
+  if (!env.hasServiceWorker) {
+    logger.warn('[Push] Service workers not supported');
+    return null;
+  }
+
+  // iOS WebView can never do web push — bail early
+  if (env.isIOSWebView) {
+    logger.warn('[Push] iOS WebView — push not supported');
+    return null;
+  }
+
+  // Skip Notification.permission check on Android WebView —
+  // it may not expose the API but FCM via SW can still work
+  if (env.hasNotificationAPI && Notification.permission === 'denied') {
+    logger.warn('[Push] Notifications blocked');
     return null;
   }
 
   try {
     const registration = await navigator.serviceWorker.register(
-      "/firebase-messaging-sw.js",
-      { scope: "/" }
+      '/firebase-messaging-sw.js',
+      { scope: '/' }
     );
 
-    // On Pi Browser, skip Notification.permission check entirely
-    // — let getToken() handle it internally
-    if (!isPiBrowser() && Notification.permission === "denied") {
-      logger.warn("[Push] Notifications blocked");
-      return null;
-    }
-
-    const msg = getFirebaseMessaging();
+    const msg   = getFirebaseMessaging();
     const token = await getToken(msg, {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: registration,
     });
 
     if (!token) {
-      logger.warn("[Push] No token returned");
+      logger.warn('[Push] No token returned');
       return null;
     }
 
     await notificationsApi.saveTokenToServer(userId, token);
-    logger.info("[Push] Registered ✓");
+    logger.info('[Push] Registered ✓');
     return token;
 
   } catch (err: any) {
     if (
-      err?.code === "messaging/permission-blocked" ||
-      err?.code === "messaging/permission-default"
+      err?.code === 'messaging/permission-blocked' ||
+      err?.code === 'messaging/permission-default'
     ) {
-      logger.warn("[Push] Permission not granted:", err.code);
+      logger.warn('[Push] Permission not granted:', err.code);
       return null;
     }
-    logger.error("[Push] Registration failed:", err);
+    logger.error('[Push] Registration failed:', err);
     return null;
   }
 }

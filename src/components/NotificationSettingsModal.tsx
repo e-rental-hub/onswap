@@ -129,30 +129,36 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
   const [preferences, setPreferences] = useState<Record<string, boolean>>(
     () => Object.fromEntries(NOTIFICATION_TYPES.map((n) => [n.id, true]))
   );
+  const [unsupportedReason, setUnsupportedReason] = useState<'ios-webview' | 'no-sw' | null>(null);
 
   // ── Detect current permission state on mount ──────────────────────────────
   useEffect(() => {
-    const isPiBrowser = /PiBrowser/i.test(navigator.userAgent);
+    const ua            = navigator.userAgent;
+    const isIOS         = /iPhone|iPad|iPod/i.test(ua);
+    const isIOSWebView  = isIOS && !/Safari\//.test(ua);
 
-    // Pi Browser WebView: Notification API absent but SW works
-    if (!("serviceWorker" in navigator)) {
-      setPermissionState("unsupported");
+    if (!('serviceWorker' in navigator)) {
+      setPermissionState('unsupported');
+      setUnsupportedReason('no-sw');
       return;
     }
 
-    if (!("Notification" in window)) {
-      if (isPiBrowser) {
-        // Treat as default — Pi Browser handles permission internally
-        setPermissionState("default");
-      } else {
-        setPermissionState("unsupported");
-      }
+    if (isIOSWebView) {
+      setPermissionState('unsupported');
+      setUnsupportedReason('ios-webview');
+      return;
+    }
+
+    // Android WebView + any env where Notification API is absent
+    // — treat as "default" so the user can still attempt to enable
+    if (!('Notification' in window)) {
+      setPermissionState('default');
       return;
     }
 
     const p = Notification.permission as PermissionState;
     setPermissionState(p);
-    setMasterEnabled(p === "granted");
+    setMasterEnabled(p === 'granted');
   }, []);
 
   // ── Enable push notifications ─────────────────────────────────────────────
@@ -206,6 +212,35 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
   // ── Permission blocked banner ─────────────────────────────────────────────
   const isBlocked = permissionState === 'denied';
   const isUnsupported = permissionState === 'unsupported';
+
+  // Replace the unsupported banner JSX:
+  {isUnsupported && (
+    <div
+      className="rounded-xl p-4 mb-4 text-sm"
+      style={{
+        background: 'rgba(100,100,100,0.1)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      {unsupportedReason === 'ios-webview' ? (
+        <>
+          <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+            Not available in Pi Browser on iPhone
+          </p>
+          <p style={{ color: 'var(--text-muted)' }}>
+            Apple restricts web push to Safari only. To receive notifications,
+            open this app in <strong>Safari</strong>, tap the Share button, and
+            select <strong>"Add to Home Screen"</strong> — then enable
+            notifications from your Home Screen app.
+          </p>
+        </>
+      ) : (
+        <p style={{ color: 'var(--text-muted)' }}>
+          Push notifications are not supported in this environment.
+        </p>
+      )}
+    </div>
+  )}
 
   return (
     <div
@@ -262,10 +297,25 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
             style={{
               background: 'rgba(100,100,100,0.1)',
               border: '1px solid var(--border)',
-              color: 'var(--text-muted)',
             }}
           >
-            Push notifications are not supported in this environment.
+            {unsupportedReason === 'ios-webview' ? (
+              <>
+                <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+                  Not available in Pi Browser on iPhone
+                </p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Apple restricts web push to Safari only. To receive notifications,
+                  open this app in <strong>Safari</strong>, tap the Share button, and
+                  select <strong>"Add to Home Screen"</strong> — then enable
+                  notifications from your Home Screen app.
+                </p>
+              </>
+            ) : (
+              <p style={{ color: 'var(--text-muted)' }}>
+                Push notifications are not supported in this environment.
+              </p>
+            )}
           </div>
         )}
 
