@@ -29,9 +29,7 @@ export const authApi = {
   updateProfile: (data: { displayName?: string; phone?: string }) =>
     apiClient.patch('/auth/profile', data),
   setCurrency: (data: {currency: CurrencyEnum}) => 
-    apiClient.post('/auth/set-currency', data),
-  testPushNotification: (userId: string) =>
-    apiClient.post('/notifications/test-login', { userId }),
+    apiClient.post('/auth/set-currency', data)
 };
 
 // ─── Saved account details ────────────────────────────────────────────────────
@@ -137,16 +135,4 @@ export const payment = {
   incomplete: (data: { paymentInfo: PaymentInfo }) =>
     apiClient.post('/wallet/deposit/incomplete', data),
   error: (_data: { paymentInfo: PaymentInfo }) => Promise.resolve(), // client-side only
-};
-
-
-// ─── Notifications ─────────────────────────────────────────────────────────────────────
-
-export const notificationsApi = {
-  testPushNotification: (userId: string) =>
-    apiClient.post('/notifications/test-login', { userId }),
-  unregisterPushNotifications: (fcmToken: string) =>
-    apiClient.delete('/notifications/token', { data: { fcmToken } }),
-  saveTokenToServer: (userId: string, fcmToken: string) =>
-    apiClient.post('/notifications/token', { userId, fcmToken, platform: 'web' }),
 };
