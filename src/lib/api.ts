@@ -149,4 +149,19 @@ export const notificationsApi = {
     apiClient.delete('/notifications/token', { data: { fcmToken } }),
   saveTokenToServer: (userId: string, fcmToken: string) =>
     apiClient.post('/notifications/token', { userId, fcmToken, platform: 'web' }),
+  savePreferences: (data: {
+      emailEnabled:    boolean,
+      email:           string | undefined,
+      whatsappEnabled: boolean,
+      whatsapp:        string | undefined,
+      pushEnabled:     boolean,
+    }) =>
+    apiClient.patch('/notifications/settings', {
+      emailEnabled:    data.emailEnabled,
+      email:           data.email,
+      whatsappEnabled: data.whatsappEnabled,
+      whatsappNumber:  data.whatsapp,
+      pushEnabled:     data.pushEnabled,
+    }),
+  getSettings: () => apiClient.get('/notifications/settings'),
 };
