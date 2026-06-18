@@ -7,7 +7,7 @@ import { WalletCard } from '@/components/p2p/WalletCard';
 import { CurrencyEnum, PAYMENT_METHOD_LABELS, PaymentMethodDetail, WalletSummary } from '@/types';
 import { useToast } from '@/hooks/useToast';
 import { logger } from '@/lib/logger';
-import { authApi, walletApi } from '@/lib/api';
+import { authApi, notificationsApi, walletApi } from '@/lib/api';
 import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
 import PaymentAccountPicker from '@/components/p2p/paymentAccountPicker';
 import BottomNav from '@/components/layout/BottomNav';
@@ -399,7 +399,7 @@ export default function ProfilePage() {
 
         <button 
           onClick={async () => {    
-              await authApi.testPushNotification(user.id);
+              await notificationsApi.custom();
               logger.info('[Push] Test notification fired');
             }
           } 

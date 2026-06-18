@@ -149,6 +149,7 @@ export const notificationsApi = {
     apiClient.delete('/notifications/token', { data: { fcmToken } }),
   saveTokenToServer: (userId: string, fcmToken: string) =>
     apiClient.post('/notifications/token', { userId, fcmToken, platform: 'web' }),
+  
   savePreferences: (data: {
       emailEnabled:    boolean,
       email:           string | undefined,
@@ -163,5 +164,16 @@ export const notificationsApi = {
       whatsappNumber:  data.whatsapp,
       pushEnabled:     data.pushEnabled,
     }),
+
+  custom: () =>
+    apiClient.post('/notifications/custom', {
+      email:     'haycoder24@gmail.com',
+      subject:  'Notification Tesing',
+      title:    'Test email sending',
+      body:     'check if email is received successfully using Resend platform',
+      // ctaText: data.ctaText,
+      // ctaUrl:  data.ctaUrl
+    }),
+  
   getSettings: () => apiClient.get('/notifications/settings'),
 };
