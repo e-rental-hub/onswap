@@ -1,6 +1,5 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { logger } from './logger';
-import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType, CurrencyEnum } from '@/types';
+import axios from 'axios';
+import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType, CurrencyEnum, INotificationSettings } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -135,4 +134,27 @@ export const payment = {
   incomplete: (data: { paymentInfo: PaymentInfo }) =>
     apiClient.post('/wallet/deposit/incomplete', data),
   error: (_data: { paymentInfo: PaymentInfo }) => Promise.resolve(), // client-side only
+};
+
+
+// ─── Notifications ─────────────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  testPushNotification: (userId: string) =>
+    apiClient.post('/notifications/test-login', { userId }),
+  unregisterPushNotifications: (fcmToken: string) =>
+    apiClient.delete('/notifications/token', { data: { fcmToken } }),
+  saveTokenToServer: (userId: string, fcmToken: string) =>
+    apiClient.post('/notifications/token', { userId, fcmToken, platform: 'web' }),
+  
+  savePreferences: (data: INotificationSettings) =>
+    apiClient.patch('/notifications/settings', {
+      emailEnabled:    data.emailEnabled,
+      email:           data.email,
+      whatsappEnabled: data.whatsappEnabled,
+      whatsappNumber:  data.whatsapp,
+      pushEnabled:     data.pushEnabled,
+    }),
+  
+  getSettings: () => apiClient.get('/notifications/settings'),
 };
