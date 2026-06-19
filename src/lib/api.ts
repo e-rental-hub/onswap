@@ -28,9 +28,7 @@ export const authApi = {
   updateProfile: (data: { displayName?: string; phone?: string }) =>
     apiClient.patch('/auth/profile', data),
   setCurrency: (data: {currency: CurrencyEnum}) => 
-    apiClient.post('/auth/set-currency', data),
-  testPushNotification: (userId: string) =>
-    apiClient.post('/notifications/test-login', { userId }),
+    apiClient.post('/auth/set-currency', data)
 };
 
 // ─── Saved account details ────────────────────────────────────────────────────
