@@ -16,6 +16,7 @@ import { logger }   from '@/lib/logger';
 import { useToast } from '@/hooks/useToast';
 import { ALL_PAYMENT_TYPES, CURRENCIES } from '@/lib/constants';
 import BottomNav from '@/components/layout/BottomNav';
+import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ function AdCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PostAdPage() {
-  const { isAuthenticated, user, preferredCurrency } = useAuth();
+  const { isAuthenticated, user, preferredCurrency, isNotificationConfigured } = useAuth();
   const router = useRouter();
   const { toast, toastErr, showToast } = useToast();
 
@@ -271,6 +272,7 @@ export default function PostAdPage() {
   const [shortfall,   setShortfall]   = useState(0);
   const [editingAd,   setEditingAd]   = useState<Ad | null>(null);
   const [form,        setForm]        = useState<AdFormState>(BLANK_FORM);
+  const [showNotificationModal, setShowNotificationModal] = useState(false)
 
   // ── Sell ad: single selected payment account (managed by PaymentAccountPicker)
   //    This is the source of truth — no redundant id stored in form state.
@@ -413,6 +415,8 @@ export default function PostAdPage() {
       setShowDeposit(true);
       return;
     }
+
+    if (!isNotificationConfigured) {setShowNotificationModal(true); return;}
 
     setSaving(true);
     try {
@@ -979,6 +983,9 @@ export default function PostAdPage() {
           onClose={() => setShowDeposit(false)}
           showToast={showToast}
         />
+      )}
+      {showNotificationModal && (
+        <NotificationSettingsModal onClose={() => setShowNotificationModal(false)} />
       )}
       <BottomNav />
     </div>

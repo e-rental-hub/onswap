@@ -4,6 +4,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { registerPushNotifications, getEnvironmentInfo, PushSupport } from '@/lib/pushNotifications';
 import { logger } from '@/lib/logger';
 import { notificationsApi } from '@/lib/api';
+import { useNotificationSettings } from '@/hooks/useNotificationSettings';
+import { INotificationSettings } from '@/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -192,31 +194,27 @@ function ChannelCard({
 
 export function NotificationSettingsModal({ onClose }: NotificationSettingsModalProps) {
   const { user } = useAuth();
+  const { settings, setSettings } = useNotificationSettings();
 
-  // ── Channel enabled state ────────────────────────────────────────────────
   const [channels, setChannels] = useState<Record<ChannelId, boolean>>({
     email: false,
     push: false,
     whatsapp: false,
   });
 
-  // ── Push-specific state ──────────────────────────────────────────────────
   const [pushSupport, setPushSupport]   = useState<PushSupport | null>(null);
   const [pushPerm,    setPushPerm]      = useState<PushPermState>('default');
   const [pushLoading, setPushLoading]   = useState(false);
   const [fcmToken,    setFcmToken]      = useState<string | null>(null);
 
-  // ── Email field state ────────────────────────────────────────────────────
   const [email, setEmail]               = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
 
-  // ── WhatsApp field state ─────────────────────────────────────────────────
-  const [whatsapp, setWhatsapp]                 = useState('');
-  const [whatsappTouched, setWhatsappTouched]   = useState(false);
+  const [whatsapp, setWhatsapp]               = useState('');
+  const [whatsappTouched, setWhatsappTouched] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
-  // ── Detect push support on mount ─────────────────────────────────────────
   useEffect(() => {
     const env = getEnvironmentInfo();
     setPushSupport(env.support);
@@ -228,24 +226,31 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
     }
   }, []);
 
-  // ── Validation (live) ────────────────────────────────────────────────────
+  // Seed the form from the shared settings instead of fetching again.
+  // Re-runs (idempotently) whenever `settings` is updated elsewhere, e.g. after save.
+  useEffect(() => {
+    if (!settings) return;
+    setChannels((c) => ({
+      ...c,
+      email:    !!settings.emailEnabled,
+      whatsapp: !!settings.whatsappEnabled,
+    }));
+    setEmail(settings.email || '');
+    setWhatsapp(settings.whatsapp || '');
+  }, [settings]);
+
   const emailError    = useMemo(() => (channels.email    ? validateEmail(email)       : null), [channels.email, email]);
   const whatsappError = useMemo(() => (channels.whatsapp  ? validateWhatsapp(whatsapp) : null), [channels.whatsapp, whatsapp]);
 
   const pushBlocked     = pushPerm === 'denied';
   const pushUnsupported = pushPerm === 'unsupported';
 
-  // ── Toggle: Email ─────────────────────────────────────────────────────────
   const toggleEmail = () => setChannels((c) => ({ ...c, email: !c.email }));
-
-  // ── Toggle: WhatsApp ──────────────────────────────────────────────────────
   const toggleWhatsapp = () => setChannels((c) => ({ ...c, whatsapp: !c.whatsapp }));
 
-  // ── Toggle: Push (drives real browser permission flow) ──────────────────
   const togglePush = useCallback(async () => {
     if (pushUnsupported) return;
 
-    // Turning OFF
     if (channels.push) {
       setPushLoading(true);
       try {
@@ -260,8 +265,7 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
       return;
     }
 
-    // Turning ON
-    if (pushBlocked) return; // can't re-prompt; banner explains why
+    if (pushBlocked) return;
     if (!user) return;
 
     setPushLoading(true);
@@ -282,7 +286,6 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
     }
   }, [channels.push, pushBlocked, pushUnsupported, fcmToken, user]);
 
-  // ── Save preferences ──────────────────────────────────────────────────────
   const canSave =
     (!channels.email    || !emailError) &&
     (!channels.whatsapp || !whatsappError);
@@ -295,13 +298,15 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
     }
     setSaving(true);
     try {
-      await notificationsApi.savePreferences({
+      const res = await notificationsApi.savePreferences({
         emailEnabled:    channels.email,
         email:           channels.email ? email.trim() : undefined,
         whatsappEnabled: channels.whatsapp,
         whatsapp:        channels.whatsapp ? whatsapp.trim() : undefined,
         pushEnabled:     channels.push,
       });
+      const saved = (res.data?.settings ?? res.data) as INotificationSettings;
+      setSettings(saved); // propagates the new configured-state to every consumer of the hook
       onClose();
     } catch (err) {
       logger.error('[NotificationModal] Save failed:', err);
@@ -364,24 +369,10 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
             )}
           </ChannelCard>
 
-          {/* ── Push channel ───────────────────────────────────────────── */}
-          <ChannelCard
-            meta={CHANNELS[1]}
-            enabled={channels.push}
-            loading={pushLoading}
-            disabled={pushUnsupported || (pushBlocked && !channels.push)}
-            onToggle={togglePush}
-          >
-            {pushBlocked && <PushBlockedBanner />}
-          </ChannelCard>
-          {/* Unsupported banner sits outside the card content area so it shows
-              even when the toggle itself is forced off/disabled */}
-          {pushUnsupported && <PushUnsupportedBanner support={pushSupport} />}
-
           {/* ── WhatsApp channel ───────────────────────────────────────── */}
           <ChannelCard
             meta={CHANNELS[2]}
-            enabled={channels.whatsapp}
+            enabled={false} // channels.whatsapp
             onToggle={toggleWhatsapp}
           >
             <label className="block text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>
@@ -405,6 +396,20 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
               <p className="text-xs mt-1" style={{ color: '#f87171' }}>{whatsappError}</p>
             )}
           </ChannelCard>
+          
+          {/* ── Push channel ───────────────────────────────────────────── */}
+          <ChannelCard
+            meta={CHANNELS[1]}
+            enabled={false}  // channels.push
+            loading={pushLoading}
+            disabled={pushUnsupported || (pushBlocked && !channels.push)}
+            onToggle={togglePush}
+          >
+            {pushBlocked && <PushBlockedBanner />}
+          </ChannelCard>
+          {/* Unsupported banner sits outside the card content area so it shows
+              even when the toggle itself is forced off/disabled */}
+          {pushUnsupported && <PushUnsupportedBanner support={pushSupport} />}
         </div>
 
         {/* Footer actions */}

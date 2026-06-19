@@ -1,6 +1,5 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { logger } from './logger';
-import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType, CurrencyEnum } from '@/types';
+import axios from 'axios';
+import { NewPaymentMethodDetail, PaymentMethodDetail, PaymentInfo, PiWalletAddress, NewPiWalletAddress, PaymentMethodEnum, AdTypeEnum, AdType, PaymentMethodType, CurrencyEnum, INotificationSettings } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
@@ -150,29 +149,13 @@ export const notificationsApi = {
   saveTokenToServer: (userId: string, fcmToken: string) =>
     apiClient.post('/notifications/token', { userId, fcmToken, platform: 'web' }),
   
-  savePreferences: (data: {
-      emailEnabled:    boolean,
-      email:           string | undefined,
-      whatsappEnabled: boolean,
-      whatsapp:        string | undefined,
-      pushEnabled:     boolean,
-    }) =>
+  savePreferences: (data: INotificationSettings) =>
     apiClient.patch('/notifications/settings', {
       emailEnabled:    data.emailEnabled,
       email:           data.email,
       whatsappEnabled: data.whatsappEnabled,
       whatsappNumber:  data.whatsapp,
       pushEnabled:     data.pushEnabled,
-    }),
-
-  custom: () =>
-    apiClient.post('/notifications/custom', {
-      email:     'haycoder24@gmail.com',
-      subject:  'Notification Tesing',
-      title:    'Test email sending',
-      body:     'check if email is received successfully using Resend platform',
-      // ctaText: data.ctaText,
-      // ctaUrl:  data.ctaUrl
     }),
   
   getSettings: () => apiClient.get('/notifications/settings'),

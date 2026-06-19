@@ -192,16 +192,6 @@ export default function ProfilePage() {
 
   const sections: MenuSection[] = [
     {
-      title: 'Info',
-      items: [
-        {
-          icon: Icon.bell, label: 'Notifications',
-          sublabel: 'Trade alerts, promotions',
-          href: '#', chevron: true,
-        },
-      ],
-    },
-    {
       title: 'Support',
       items: [
         {
@@ -383,29 +373,55 @@ export default function ProfilePage() {
           <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
         </button>
 
-        <button
-          onClick={() => setShowNotification(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '10px 16px', borderRadius: '14px', cursor: 'pointer',
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            transition: 'border-color 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
-          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-        >
-          <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>Notification settings</span>
-        </button>
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{
+            borderRadius: '18px',
+            border: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            overflow: 'hidden',
+          }}>
+            <div
+              onClick={() => setShowNotification(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '14px',
+                padding: '15px 18px',
+                cursor: 'pointer',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              {/* icon bubble */}
+              <div style={{
+                width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(244,160,23,0.08)',
+                color: '#f4a017',
+              }}>
+                {Icon.bell}
+              </div>
 
-        <button 
-          onClick={async () => {    
-              await notificationsApi.custom();
-              logger.info('[Push] Test notification fired');
-            }
-          } 
-        >
-          test push notifications
-        </button>
+              {/* text */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{
+                  margin: 0, fontSize: '14px', fontWeight: 600,
+                  color: 'var(--text-primary)',
+                  lineHeight: 1.2,
+                }}>
+                  Notification settings
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  WhatsApp, email, trade alerts
+                </p>
+              </div>
+
+              {/* chevron */}
+              <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
+                {Icon.chevron}
+              </span>
+            </div>
+          </div>
+        </div>
 
         {sections.map((section) => (
           <div key={section.title} style={{ marginBottom: '24px' }}>

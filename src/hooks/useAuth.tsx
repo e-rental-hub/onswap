@@ -7,12 +7,12 @@ import {
   ReactNode,
   useEffect,
   useRef,
+  SetStateAction,
 } from 'react';
-import { authApi, notificationsApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
+import { authApi, paymentMethodsApi, piWalletsApi, setAuthToken } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { User, PaymentMethodDetail, NewPaymentMethodDetail, PiWalletAddress, NewPiWalletAddress, CurrencyEnum } from '@/types';
 import { CURRENCIES } from '@/lib/constants';
-import { registerPushNotifications } from '@/lib/pushNotifications';
 
 // ─── Context shape ────────────────────────────────────────────────────────────
 
@@ -23,6 +23,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isDevMode: boolean;
   preferredCurrency: (typeof CURRENCIES)[number];
+  isNotificationConfigured: boolean
 
   /** Called by PiAuthButton after a successful Pi.authenticate() */
   loginWithPi: (
@@ -47,6 +48,7 @@ interface AuthContextType {
   setDefaultPiWalletAddress: (waId: string) => Promise<void>;
   setUserCurrency: (selectedCurrency: CurrencyEnum) =>Promise<void>;
   setPreferredCurrency: (currency: (typeof CURRENCIES)[number]) => void;
+  setIsNotificationConfigured: React.Dispatch<SetStateAction<boolean>>;
 }
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
@@ -66,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [preferredCurrency, setPreferredCurrency] = useState<(typeof CURRENCIES)[number]>(CURRENCIES[0]);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notificationToken, setNotificationToken] = useState<string | null>(null);
+  const [isNotificationConfigured, setIsNotificationConfigured] = useState(false);
 
   const currencyFromUser = (u: User | null) =>
     CURRENCIES.find((c) => c.code === u?.preferredCurrency) ?? CURRENCIES[0];
@@ -118,7 +120,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       logger.info('Logging out');
       (await authApi.logout()); // clears the httpOnly cookie server-side
-      notificationToken && await notificationsApi.unregisterPushNotifications(notificationToken);
     } finally {
       setAuthToken(null);
       setToken(null);
@@ -126,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPreferredCurrency(CURRENCIES[0]);
       window.location.href = '/';
     }
-  }, [notificationToken]);
+  }, []);
 
   // ── Refresh user from server ──────────────────────────────────────────────────
 
@@ -229,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!token,
         isDevMode,
         preferredCurrency,
+        isNotificationConfigured,
         loginWithPi,
         logout,
         refreshUser,
@@ -242,6 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDefaultPiWalletAddress,
         setUserCurrency,
         setPreferredCurrency,
+        setIsNotificationConfigured,
       }}
     >
       {children}
