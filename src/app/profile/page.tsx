@@ -14,6 +14,7 @@ import BottomNav from '@/components/layout/BottomNav';
 import PiWalletPicker from '@/components/p2p/PiWalletAddressPicker';
 import { CurrencyModal } from '@/components/CurrencyModal';
 import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
+import { MenuRow, MenuSection } from '@/components/MenuRow';
 
 // ── types ────────────────────────────────────────────────────────────────────
 type MenuSection = {
@@ -357,169 +358,35 @@ export default function ProfilePage() {
         />
 
         {/* Currency picker button */}
-        <button
-          onClick={() => setShowCurrencyModal(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '8px',
-            padding: '10px 16px', borderRadius: '14px', cursor: 'pointer',
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            transition: 'border-color 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(244,160,23,0.4)')}
-          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-        >
-          <span style={{ fontSize: '20px' }}>{preferredCurrency.flag}</span>
-          <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{preferredCurrency.code}</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
-        </button>
-
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{
-            borderRadius: '18px',
-            border: '1px solid var(--border)',
-            background: 'var(--bg-card)',
-            overflow: 'hidden',
-          }}>
-            <div
-              onClick={() => setShowNotification(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '14px',
-                padding: '15px 18px',
-                cursor: 'pointer',
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              {/* icon bubble */}
-              <div style={{
-                width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(244,160,23,0.08)',
-                color: '#f4a017',
-              }}>
-                {Icon.bell}
-              </div>
-
-              {/* text */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{
-                  margin: 0, fontSize: '14px', fontWeight: 600,
-                  color: 'var(--text-primary)',
-                  lineHeight: 1.2,
-                }}>
-                  Notification settings
-                </p>
-                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  WhatsApp, email, trade alerts
-                </p>
-              </div>
-
-              {/* chevron */}
-              <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
-                {Icon.chevron}
+        <MenuSection title="Preferences">
+          <MenuRow
+            icon={Icon.bell}
+            label="Notification settings"
+            sublabel="WhatsApp, email, trade alerts"
+            onClick={() => setShowNotification(true)}
+            chevron
+          />
+          <MenuRow
+            icon={<span style={{ fontSize: '18px' }}>{preferredCurrency.flag}</span>}
+            label="Currency"
+            sublabel="Preferred currency for prices"
+            onClick={() => setShowCurrencyModal(true)}
+            trailing={
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                  {preferredCurrency.code}
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>▾</span>
               </span>
-            </div>
-          </div>
-        </div>
+            }
+          />
+        </MenuSection>
 
-        {sections.map((section) => (
-          <div key={section.title} style={{ marginBottom: '24px' }}>
-            <div style={{
-              borderRadius: '18px',
-              border: '1px solid var(--border)',
-              background: 'var(--bg-card)',
-              overflow: 'hidden',
-            }}>
-              {section.items.map((item, idx) => {
-                const isLast = idx === section.items.length - 1;
-                const inner = (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: '14px',
-                    padding: '15px 18px',
-                    borderBottom: isLast ? 'none' : '1px solid var(--border)',
-                    cursor: 'pointer',
-                    transition: 'background 0.12s',
-                  }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    {/* icon bubble */}
-                    <div style={{
-                      width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: item.danger
-                        ? 'rgba(239,68,68,0.1)'
-                        : 'rgba(244,160,23,0.08)',
-                      color: item.danger ? '#f87171' : '#f4a017',
-                    }}>
-                      {item.icon}
-                    </div>
-
-                    {/* text */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        margin: 0, fontSize: '14px', fontWeight: 600,
-                        color: item.danger ? '#f87171' : 'var(--text-primary)',
-                        lineHeight: 1.2,
-                      }}>
-                        {item.label}
-                      </p>
-                      {item.sublabel && (
-                        <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {item.sublabel}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* badge */}
-                    {item.badge && (
-                      <span style={{
-                        fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '20px',
-                        background: item.badge.includes('✓')
-                          ? 'rgba(74,222,128,0.12)'
-                          : item.badge === 'New'
-                            ? 'rgba(244,160,23,0.15)'
-                            : 'rgba(251,191,36,0.12)',
-                        color: item.badge.includes('✓')
-                          ? '#4ade80'
-                          : item.badge === 'New'
-                            ? '#f4a017'
-                            : '#fbbf24',
-                        border: item.badge.includes('✓')
-                          ? '1px solid rgba(74,222,128,0.25)'
-                          : '1px solid rgba(244,160,23,0.25)',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {item.badge}
-                      </span>
-                    )}
-
-                    {/* chevron */}
-                    {item.chevron && (
-                      <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>
-                        {Icon.chevron}
-                      </span>
-                    )}
-                  </div>
-                );
-
-                if (item.href) {
-                  return (
-                    <Link key={item.label} href={item.href} style={{ textDecoration: 'none', display: 'block' }}>
-                      {inner}
-                    </Link>
-                  );
-                }
-                return (
-                  <div key={item.label} onClick={item.onClick}>
-                    {inner}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <MenuSection title="Support">
+          <MenuRow icon={Icon.help} label="Help & FAQ" sublabel="How P2P trading works" href="#" chevron />
+          <MenuRow icon={Icon.terms} label="Terms & Privacy" href="#" chevron />
+          <MenuRow icon={Icon.logout} label="Log Out" onClick={() => setShowLogout(true)} danger />
+        </MenuSection>
 
         {/* version stamp */}
         <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px', paddingBottom: '8px' }}>
