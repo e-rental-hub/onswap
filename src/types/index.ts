@@ -115,6 +115,14 @@ export interface User {
   preferredCurrency: CurrencyEnum;
 }
 
+export interface INotificationSettings {
+  emailEnabled:    boolean,
+  email:           string | undefined,
+  whatsappEnabled: boolean,
+  whatsapp:        string | undefined,
+  pushEnabled:     boolean,
+}
+
 // ─── Ads ──────────────────────────────────────────────────────────────────────
 
 export type AdType   = 'buy' | 'sell';

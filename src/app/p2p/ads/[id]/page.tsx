@@ -15,6 +15,7 @@ import {
 } from '@/types';
 import { logger } from '@/lib/logger';
 import { CURRENCIES } from '@/lib/constants';
+import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 
 // ─── State machine / input mode ───────────────────────────────────────────────
 type Step      = 'configure' | 'summary' | 'depositing' | 'done';
@@ -269,7 +270,7 @@ function EscrowLockNotice({
 export default function AdDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
-  const { user, preferredCurrency, isAuthenticated, isDevMode } = useAuth();
+  const { user, preferredCurrency, isAuthenticated, isDevMode, isNotificationConfigured } = useAuth();
 
   const [ad,             setAd]             = useState<Ad | null>(null);
   const [loading,        setLoading]        = useState(true);
@@ -280,6 +281,7 @@ export default function AdDetailPage() {
   const [walletLoaded,   setWalletLoaded]   = useState(false);
   const [creating,       setCreating]       = useState(false);
   const [error,          setError]          = useState('');
+  const [showNotificationModal, setShowNotificationModal] = useState(false)
 
   // ── sell-ad viewer (buyer): which payment method type they'll use ──────────
   const [selectedPm, setSelectedPm] = useState<PaymentMethodType>(PaymentMethodEnum.bankTransfer);
@@ -386,6 +388,8 @@ export default function AdDetailPage() {
   const handleCreateOrder = async () => {
     const err = validate();
     if (err) { setError(err); return; }
+
+    if (!isNotificationConfigured) {setShowNotificationModal(true); return;}
 
     setCreating(true);
     setError('');
@@ -980,6 +984,9 @@ export default function AdDetailPage() {
 
         </div>
       </div>
+      {showNotificationModal && (
+        <NotificationSettingsModal onClose={() => setShowNotificationModal(false)} />
+      )}
     </div>
   );
 }
