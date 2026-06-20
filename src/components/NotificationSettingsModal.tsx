@@ -296,6 +296,10 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
       setWhatsappTouched(true);
       return;
     }
+
+    // Prevent turning off email notification - to be removed later
+    if (!channels.email) return
+
     setSaving(true);
     try {
       const res = await notificationsApi.savePreferences({
@@ -370,7 +374,7 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
           </ChannelCard>
 
           {/* ── WhatsApp channel ───────────────────────────────────────── */}
-          <ChannelCard
+          {/* <ChannelCard
             meta={CHANNELS[2]}
             enabled={false} // channels.whatsapp
             onToggle={toggleWhatsapp}
@@ -395,10 +399,10 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
             {whatsappTouched && whatsappError && (
               <p className="text-xs mt-1" style={{ color: '#f87171' }}>{whatsappError}</p>
             )}
-          </ChannelCard>
+          </ChannelCard> */}
           
           {/* ── Push channel ───────────────────────────────────────────── */}
-          <ChannelCard
+          {/* <ChannelCard
             meta={CHANNELS[1]}
             enabled={false}  // channels.push
             loading={pushLoading}
@@ -406,10 +410,10 @@ export function NotificationSettingsModal({ onClose }: NotificationSettingsModal
             onToggle={togglePush}
           >
             {pushBlocked && <PushBlockedBanner />}
-          </ChannelCard>
+          </ChannelCard> */}
           {/* Unsupported banner sits outside the card content area so it shows
               even when the toggle itself is forced off/disabled */}
-          {pushUnsupported && <PushUnsupportedBanner support={pushSupport} />}
+          {/* {pushUnsupported && <PushUnsupportedBanner support={pushSupport} />} */}
         </div>
 
         {/* Footer actions */}
