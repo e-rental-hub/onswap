@@ -24,8 +24,6 @@ export interface PiPrice {
 const CMC_CONVERT: Record<string, string> = {
   NGN: 'NGN',
   KES: 'KES',
-  GHS: 'GHS',
-  ZAR: 'ZAR',
   USD: 'USD',
 };
 
@@ -33,8 +31,6 @@ const CMC_CONVERT: Record<string, string> = {
 const FALLBACK_USD_RATES: Record<string, number> = {
   NGN: 1610,
   KES: 130,
-  GHS: 15.7,
-  ZAR: 18.5,
   USD: 1,
 };
 

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Navbar from '@/components/layout/Navbar';
+import PiPriceTicker from '@/components/PiPriceTicker';
 
 export default function HomePage() {
   const features = [
@@ -51,6 +52,10 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+      </section>
+
+      <section className="max-w-4xl mx-auto px-4 pb-4">
+        <PiPriceTicker />
       </section>
 
       {/* Features */}

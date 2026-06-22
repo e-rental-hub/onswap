@@ -22,7 +22,6 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Login failed';
       setError(msg);
-      logger.error('Login failed:', err);
     } finally {
       setLoading(false);
     }
