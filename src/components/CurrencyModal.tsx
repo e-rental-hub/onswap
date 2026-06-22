@@ -52,12 +52,23 @@ export function CurrencyModal({
           animation: 'slideUp 0.22s cubic-bezier(0.34,1.4,0.64,1)',
         }}
       >
-        <style>{`@keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <p style={{ fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)' }}>Select Currency</p>
           <button onClick={onClose} style={{ color: 'var(--text-muted)', fontSize: '20px', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div
+          className="currency-list"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            maxHeight: '55vh',
+            overflowY: 'auto',
+            paddingBottom: '12px',
+            // hide scrollbar on webkit while keeping scroll functionality
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
           {CURRENCIES.map((c) => {
             const active = c.code === preferredCurrency.code;
             return (
