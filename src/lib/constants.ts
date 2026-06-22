@@ -7,7 +7,7 @@ export const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
 export const CURRENCIES = [
   { code: CurrencyEnum.NGN, symbol: '₦',  flag: '🇳🇬', label: 'Nigerian Naira' },
   { code: CurrencyEnum.KES, symbol: 'KSh', flag: '🇰🇪', label: 'Kenyan Shilling' },
-  { code: CurrencyEnum.ZAR, symbol: 'R',   flag: '🇿🇦', label: 'South African Rand' },
+  { code: CurrencyEnum.CFA, symbol: 'FCFA', flag: 'CM', label: 'Central African CFA franc' },
   { code: CurrencyEnum.CDF, symbol: 'FC',  flag: '🇨🇩', label: 'Congolese Franc' },
   { code: CurrencyEnum.TZS, symbol: 'TSh', flag: '🇹🇿', label: 'Tanzanian Shilling' },
   { code: CurrencyEnum.UGX, symbol: 'USh', flag: '🇺🇬', label: 'Ugandan Shilling' },
