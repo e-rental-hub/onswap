@@ -46,12 +46,18 @@ function ModeSwitcher({ mode, onChange }: { mode: MarketMode; onChange: (m: Mark
 
 // ── Express Panel (inline teaser — full page is ExpressPage.tsx) ──────────────
 function ExpressPanel({ currency }: { currency: typeof CURRENCIES[0] }) {
+  const MOCK_RATE: Partial<Record<CurrencyEnum, number>> = {
+  [CurrencyEnum.NGN]: 8250,
+  [CurrencyEnum.KES]: 1680,
+};
+
+
   const router = useRouter();
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [piInput, setPiInput] = useState('');
-  const MOCK_RATE = { NGN: 8250, GHS: 12.4, KES: 1680, ZAR: 230, USD: 5.1 }[currency.code] ?? 8250;
+  const rate = MOCK_RATE[currency.code as CurrencyEnum] ?? 8250;
   const piNum = parseFloat(piInput) || 0;
-  const fiatOut = piNum * MOCK_RATE;
+  const fiatOut = piNum * rate;
 
   return (
     <div style={{
