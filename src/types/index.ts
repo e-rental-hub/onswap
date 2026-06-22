@@ -289,7 +289,15 @@ export enum EscrowStatusEnum {
   refunded = 'refunded',
 }
 
+
 export enum CurrencyEnum {
   NGN        = 'NGN',
   KES = 'KES',
+  CFA = 'CFA',
+  CDF = 'CDF',
+  TZS = 'TZS',
+  UGX = 'UGX',
+  RWF = 'RWF',
+  ETB = 'ETB',
+  ZMK = 'ZMK'
 }

@@ -5,11 +5,15 @@ export const ALL_PAYMENT_TYPES: PaymentMethodType[] = [
 ];
 
 export const CURRENCIES = [
-  { code: CurrencyEnum.NGN, symbol: '₦', flag: '🇳🇬', label: 'Naira' },
-  { code: CurrencyEnum.KES, symbol: 'KSh', flag: '🇰🇪', label: 'Ke Shilling' },
-//   { code: 'GHS', symbol: '₵', flag: '🇬🇭', label: 'Ghanaian Cedi' },
-//   { code: 'ZAR', symbol: 'R',  flag: '🇿🇦', label: 'South African Rand' },
-//   { code: 'USD', symbol: '$',  flag: '🇺🇸', label: 'US Dollar' },
+  { code: CurrencyEnum.NGN, symbol: '₦',  flag: '🇳🇬', label: 'Nigerian Naira' },
+  { code: CurrencyEnum.KES, symbol: 'KSh', flag: '🇰🇪', label: 'Kenyan Shilling' },
+  { code: CurrencyEnum.CFA, symbol: 'FCFA', flag: '🇨🇲', label: 'Central African CFA franc' },
+  { code: CurrencyEnum.CDF, symbol: 'FC',  flag: '🇨🇩', label: 'Congolese Franc' },
+  { code: CurrencyEnum.TZS, symbol: 'TSh', flag: '🇹🇿', label: 'Tanzanian Shilling' },
+  { code: CurrencyEnum.UGX, symbol: 'USh', flag: '🇺🇬', label: 'Ugandan Shilling' },
+  { code: CurrencyEnum.RWF, symbol: 'FRw', flag: '🇷🇼', label: 'Rwandan Franc' },
+  { code: CurrencyEnum.ETB, symbol: 'Br',  flag: '🇪🇹', label: 'Ethiopian Birr' },
+  { code: CurrencyEnum.ZMK, symbol: 'ZK',  flag: '🇿🇲', label: 'Zambian Kwacha' },
 ];
 
 export type MarketMode = 'express' | 'p2p';
