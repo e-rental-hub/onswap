@@ -13,7 +13,7 @@ export const CURRENCIES = [
   { code: CurrencyEnum.UGX, symbol: 'USh', flag: '🇺🇬', label: 'Ugandan Shilling' },
   { code: CurrencyEnum.RWF, symbol: 'FRw', flag: '🇷🇼', label: 'Rwandan Franc' },
   { code: CurrencyEnum.ETB, symbol: 'Br',  flag: '🇪🇹', label: 'Ethiopian Birr' },
-  { code: CurrencyEnum.ZMK, symbol: 'ZK',  flag: '🇿🇲', label: 'Zambian Kwacha' },
+  { code: CurrencyEnum.ZMW, symbol: 'ZK',  flag: '🇿🇲', label: 'Zambian Kwacha' },
 ];
 
 export type MarketMode = 'express' | 'p2p';

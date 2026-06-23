@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    //Coingecko supported currencies ngn,kes,etb,ghs,ugx,tzs,rwf,cdf,zmw,usd,cdf,zar,egp,mad
     const url = `https://api.coingecko.com/api/v3/simple/price` +
       `?ids=${GECKO_COIN_ID}&vs_currencies=${currency},ngn,kes,usd&include_24hr_change=true`;
 
