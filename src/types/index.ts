@@ -291,7 +291,7 @@ export enum EscrowStatusEnum {
 
 
 export enum CurrencyEnum {
-  NGN        = 'NGN',
+  NGN = 'NGN',
   KES = 'KES',
   CFA = 'CFA',
   CDF = 'CDF',
@@ -299,5 +299,5 @@ export enum CurrencyEnum {
   UGX = 'UGX',
   RWF = 'RWF',
   ETB = 'ETB',
-  ZMK = 'ZMK'
+  ZMW = 'ZMW'
 }

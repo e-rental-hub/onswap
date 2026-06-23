@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Navbar from '@/components/layout/Navbar';
+import PiPriceTicker from '@/components/PiPriceTicker';
 
 export default function HomePage() {
   const features = [
@@ -25,11 +26,11 @@ export default function HomePage() {
         <div className="absolute inset-0 pointer-events-none" style={{
           background: 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(240,160,60,0.12) 0%, transparent 70%)'
         }} />
-        <div className="max-w-4xl mx-auto px-4 py-24 text-center relative">
+        <div className="max-w-4xl mx-auto px-4 py-10 text-center relative">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium mb-6"
             style={{ background: 'rgba(240,160,60,0.1)', border: '1px solid rgba(240,160,60,0.2)', color: 'var(--pi-gold)' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-            Live P2P Market · Naira (NGN)
+            Live African Pi Exchange
           </div>
 
           <h1 className="text-5xl md:text-7xl font-extrabold mb-6 leading-none tracking-tight"
@@ -39,7 +40,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-lg md:text-xl max-w-xl mx-auto mb-10 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-            Peer-to-peer Pi trading with escrow protection. Buy or sell Pi using Naira bank transfer — safe, fast, and fully in your control.
+            Peer-to-peer Pi trading with escrow protection. Buy or sell Pi using African currency — safe, fast, and fully in your control.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -51,6 +52,10 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+      </section>
+
+      <section className="max-w-4xl mx-auto px-4 pb-4">
+        <PiPriceTicker />
       </section>
 
       {/* Features */}
@@ -102,7 +107,7 @@ export default function HomePage() {
       </section>
 
       <footer className="border-t py-8 text-center text-xs" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
-        Pi P2P · Not affiliated with Pi Network Core Team · Trade at your own discretion
+        onSwap · Not affiliated with Pi Network Core Team · Trade at your own discretion
       </footer>
     </div>
   );
