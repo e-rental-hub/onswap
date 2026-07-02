@@ -16,6 +16,8 @@ import { PiAuthResult, PaymentInfo } from "@/types";
 import { payment } from "@/lib/api";
 import Image from "next/image";
 
+type NativeFeature = "inline_media" | "request_permission" | "ad_network";
+
 declare global {
   interface Window {
     Pi?: {
@@ -25,6 +27,9 @@ declare global {
         onIncompletePaymentFound: (p: PaymentInfo) => void
       ): Promise<PiAuthResult>;
       createPayment(data: unknown, callbacks: unknown): void;
+      openShareDialog(title: string, message: string): void;
+      openUrlInSystemBrowser(url: string): Promise<void>;
+      nativeFeaturesList(): Promise<Array<NativeFeature>>;
     };
   }
 }
@@ -77,6 +82,13 @@ export function PiAuthButton({
         }
       );
 
+      window.Pi.nativeFeaturesList().then((features) => {
+        console.log("[Pi] Native features available:", features);
+      }).catch((err) => {
+        console.warn("[Pi] Failed to get native features:", err);
+      });
+      window.Pi.openShareDialog("Pi Network Authentication", `Successfully authenticated as ${auth.user.username}.`);
+      window.Pi.openUrlInSystemBrowser('https://proptriz.com');
       onAuthSuccess(auth.accessToken, auth.user.uid, auth.user.username);
     } catch (err) {
       const error = err instanceof Error ? err : new Error("Authentication failed");
