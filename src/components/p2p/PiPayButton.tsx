@@ -4,6 +4,8 @@ import { PaymentInfo, PiPaymentData } from '@/types';
 import { walletApi } from '@/lib/api';
 import { logger }    from '@/lib/logger';
 
+type NativeFeature = "inline_media" | "request_permission" | "ad_network";
+
 declare global {
   interface Window {
     Pi?: {
@@ -13,6 +15,9 @@ declare global {
         onIncompletePaymentFound: (p: PaymentInfo) => void
       ): Promise<{ accessToken: string; user: { uid: string; username: string } }>;
       createPayment(data: unknown, callbacks: unknown): void;
+      nativeFeaturesList(): Promise<Array<NativeFeature>>;
+      openShareDialog(title: string, message: string): void;
+      openUrlInSystemBrowser(url: string): Promise<void>
     };
   }
 }
