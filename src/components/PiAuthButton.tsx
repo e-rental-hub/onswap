@@ -15,6 +15,7 @@ import React, { useState, useEffect } from "react";
 import { PiAuthResult, PaymentInfo } from "@/types";
 import { payment } from "@/lib/api";
 import Image from "next/image";
+import { logger } from "@/lib/logger";
 
 type NativeFeature = "inline_media" | "request_permission" | "ad_network";
 
@@ -77,18 +78,11 @@ export function PiAuthButton({
             await payment.incomplete({paymentInfo: incompletePmt});
           } catch {
             // Non-fatal — log and continue
-            console.warn("[Pi] Failed to resolve incomplete payment:", incompletePmt.identifier);
+            logger.warn("[Pi] Failed to resolve incomplete payment:", incompletePmt.identifier);
           }
         }
       );
 
-      window.Pi.nativeFeaturesList().then((features) => {
-        console.log("[Pi] Native features available:", features);
-      }).catch((err) => {
-        console.warn("[Pi] Failed to get native features:", err);
-      });
-      window.Pi.openShareDialog("Pi Network Authentication", `Successfully authenticated as ${auth.user.username}.`);
-      window.Pi.openUrlInSystemBrowser('https://proptriz.com');
       onAuthSuccess(auth.accessToken, auth.user.uid, auth.user.username);
     } catch (err) {
       const error = err instanceof Error ? err : new Error("Authentication failed");
